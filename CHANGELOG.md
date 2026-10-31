@@ -2,6 +2,17 @@
 
 All notable changes to nvtop-web.
 
+## [2.2.0] — 2026-10-31
+
+### Visual overhaul & showcase documentation
+- Full showcase-tier documentation suite designed by Claude Fable with architecture diagrams, interactive telemetry breakdowns, and responsive container layout galleries.
+- Live animated GIF suite in `docs/media/`:
+  - `dashboard-live.gif`: 4× GPU real-time telemetry, token speedometer odometer, and WebGL shader wallpaper.
+  - `theme-cycling.gif`: live demonstration cycling through 13 WebGL shader themes in real time.
+  - `gpu-card-live.gif`: close-up recording of the analog speedometer, thermometer, and KV cache memory breakdown.
+- Complete theme creation specification published in `docs/THEMES.md`.
+- Privacy & kiosk mode in `app.py`: `NVTOP_HOST_LABEL` for customizable host branding and `NVTOP_MASK_NAMES=1` for anonymized kiosk/screenshot streaming.
+
 ## [2.1.1] — 2026-10-31
 
 ### Wallpaper smoothness

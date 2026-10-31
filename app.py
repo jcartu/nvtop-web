@@ -39,6 +39,10 @@ POLL_SECONDS = float(os.environ.get("NVTOP_POLL_SECONDS", "1.0"))
 # LLM endpoint probes run on their own slower cadence so they never block it.
 GPU_POLL_SECONDS = float(os.environ.get("NVTOP_GPU_POLL_SECONDS", str(min(POLL_SECONDS, 0.25))))
 LLM_POLL_SECONDS = float(os.environ.get("NVTOP_LLM_POLL_SECONDS", "1.0"))
+# Display name for this machine (brand, title, footer). Defaults to the hostname.
+HOST_LABEL = os.environ.get("NVTOP_HOST_LABEL") or os.uname().nodename
+# Demo/privacy mode: generic model + process identities in the stream (screenshots, kiosks)
+MASK_NAMES = os.environ.get("NVTOP_MASK_NAMES") == "1"
 # History (chart) sampling cadence — kept ~1s independent of the GPU push rate
 # so the chart time-window and per-snapshot payload size stay constant even
 # when the live tiles refresh several times per second.
@@ -1331,6 +1335,12 @@ def sniff_models(gpus: list, models: list) -> list:
     if demo:
         bootlog.enrich([demo])
         out.insert(0, demo)
+    if MASK_NAMES:
+        for e in out:
+            it = e.get("intel") or {}
+            e["name"] = it.get("display_name") or it.get("family") or "model"
+            e["path"] = ""
+            e["served_names"] = [e["name"]] if e.get("served_names") else []
     return out
 
 
@@ -1824,6 +1834,23 @@ def _energy_today(total_j: float, now: float) -> float:
     return _energy_day["acc_j"] + (total_j - _energy_day["base_j"])
 
 
+def _mask_snapshot(snap: dict) -> None:
+    for m in snap.get("models") or []:
+        it = m.get("intel") or {}
+        nm = it.get("display_name") or it.get("family") or m.get("label") or "model"
+        m["model_names"] = [nm] if m.get("model_names") else []
+        m["label"] = nm
+        m["endpoint"] = "http://127.0.0.1:" + str(m.get("port") or "8000")
+    for g in snap.get("gpus") or []:
+        for p in g.get("processes") or []:
+            p["process_name"] = "engine-worker"
+            p["pid"] = 10000 + g["index"]
+        g["uuid"] = f"GPU-{g['index']:08X}-0000-0000-0000-000000000000"
+        for mm in (g.get("tps") or {}).get("models") or []:
+            mm["label"] = mm.get("label") or "model"
+            mm["names"] = [mm["label"]]
+
+
 def build_snapshot() -> dict[str, Any]:
     now = time.time()
     gpus = collect_gpus()
@@ -1889,7 +1916,7 @@ def build_snapshot() -> dict[str, Any]:
         g["tps"] = per_gpu_tps.get(g["index"], {"input": 0.0, "output": 0.0, "total": 0.0, "models": []})
     snap = {
         "generated_at": utc_iso(),
-        "host": os.uname().nodename,
+        "host": HOST_LABEL,
         "driver": get_driver(),
         "cuda": get_cuda(),
         "uptime_seconds": uptime_seconds(),
@@ -1915,6 +1942,8 @@ def build_snapshot() -> dict[str, Any]:
             "history": {k: list(v) for k, v in STATE.global_hist.items()},
         },
     }
+    if MASK_NAMES:
+        _mask_snapshot(snap)
     return snap
 
 
