@@ -1,0 +1,2216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#030811" />
+<meta name="mobile-web-app-capable" content="yes" />
+<link rel="manifest" href="/static/manifest.webmanifest" crossorigin="use-credentials" />
+<title>nvtop</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>◈</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:dark;
+  --accent:#57c8ff;
+  --accent2:#ffc96b;
+  --accent-rgb:87,200,255;
+  --accent2-rgb:255,201,107;
+  --void:#030811;
+  --panel:rgba(8,16,30,.55);
+  --line:rgba(255,255,255,.08);
+  --line-strong:rgba(255,255,255,.18);
+  --text:#e8f2fa;
+  --muted:#8a99a8;
+  --faint:#51606e;
+  --good:#48f5a7;
+  --good-rgb:72,245,167;
+  --warn:#ffb84d;
+  --warn-rgb:255,184,77;
+  --crit:#ff4d68;
+  --crit-rgb:255,77,104;
+  --info:#57c8ff;
+  --info-rgb:87,200,255;
+  --radius:16px;
+  --glow:1;
+  --font-display:'Inter',system-ui,sans-serif;
+  --font-head:'Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+  --mono:var(--font-mono);
+  --sans:var(--font-head);
+}
+*{box-sizing:border-box}
+html{scrollbar-gutter:stable}
+html,body{margin:0;padding:0;background:var(--void);color:var(--text);font-family:var(--sans);min-height:100vh}
+body{overflow-x:hidden;transition:background-color .8s ease}
+/* ── wallpaper engine layers ── */
+#wp-a,#wp-b{position:fixed;inset:0;width:100vw;height:100vh;z-index:0;opacity:0;transition:opacity 1.15s ease;background:var(--void)}
+.vig{position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 38%,transparent 30%,rgba(0,0,0,.28) 78%,rgba(0,0,0,.55) 100%)}
+body.theme-light .vig{background:radial-gradient(ellipse at 50% 38%,transparent 40%,rgba(255,255,255,.12) 80%,rgba(190,205,212,.30) 100%)}
+#shift-sweep{position:fixed;inset:0;z-index:90;pointer-events:none;opacity:0;
+  background:linear-gradient(100deg,transparent 20%,rgba(var(--accent-rgb),.16) 46%,rgba(var(--accent2-rgb),.20) 52%,transparent 78%);
+  transform:translateX(-100%)}
+#shift-sweep.go{animation:sweep .95s cubic-bezier(.6,.05,.25,1) both}
+@keyframes sweep{from{opacity:1;transform:translateX(-100%)}to{opacity:1;transform:translateX(100%)}}
+#wp-toast{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:95;pointer-events:none;
+  text-align:center;opacity:0;font-family:var(--font-display)}
+#wp-toast .t1{font-size:clamp(28px,4.6vw,58px);font-weight:800;letter-spacing:.18em;color:var(--text);
+  text-shadow:0 0 30px rgba(var(--accent-rgb),calc(.75*var(--glow))),0 0 4px rgba(var(--accent-rgb),.9)}
+#wp-toast .t2{font-family:var(--font-mono);font-size:12px;letter-spacing:.5em;color:var(--muted);margin-top:8px;text-transform:uppercase}
+#wp-toast.show{animation:toastin 1.9s cubic-bezier(.2,.8,.25,1) both}
+@keyframes toastin{0%{opacity:0;transform:translate(-50%,-50%) scale(.9);filter:blur(8px)}
+  12%{opacity:1;transform:translate(-50%,-50%) scale(1.02);filter:blur(0)}
+  22%{transform:translate(-50%,-50%) scale(1)}78%{opacity:1}100%{opacity:0;filter:blur(6px)}}
+
+/* ── event ticker ── */
+#ev-feed{position:fixed;right:max(14px,env(safe-area-inset-right));bottom:44px;z-index:94;width:min(370px,calc(100vw - 28px));display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.ev{display:flex;align-items:baseline;gap:10px;padding:9px 12px;border-radius:calc(var(--radius)*.6);
+  background:linear-gradient(rgba(0,0,0,.30),rgba(0,0,0,.30)),var(--panel);border:1px solid var(--line);border-left:3px solid var(--info);
+  backdrop-filter:blur(18px) saturate(1.25);font-family:var(--font-mono);font-size:11px;
+  letter-spacing:.05em;color:var(--text);box-shadow:0 10px 30px rgba(0,0,0,.35);
+  opacity:0;transform:translateX(30px)}
+body.theme-light .ev{background:var(--panel)}
+.ev.in{opacity:1;transform:none;transition:opacity .3s ease,transform .38s cubic-bezier(.2,.9,.3,1.12)}
+.ev.out{opacity:0;transform:translateY(-8px);transition:opacity .45s ease,transform .45s ease}
+.ev .ic{flex:none;width:15px;text-align:center}
+.ev .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev .ts{flex:none;color:var(--faint);font-size:9px;letter-spacing:.1em}
+.ev.good{border-left-color:var(--good)} .ev.good .ic{color:var(--good)}
+.ev.info{border-left-color:var(--info)} .ev.info .ic{color:var(--info)}
+.ev.warn{border-left-color:var(--warn)} .ev.warn .ic{color:var(--warn)}
+.ev.crit{border-left-color:var(--crit);animation:evcrit .9s ease-in-out 2} .ev.crit .ic{color:var(--crit)}
+@keyframes evcrit{0%,100%{box-shadow:0 10px 30px rgba(0,0,0,.35)}50%{box-shadow:0 10px 30px rgba(0,0,0,.35),0 0 26px rgba(var(--crit-rgb),.45)}}
+@media(max-width:760px){#ev-feed{display:none}}
+
+/* ── theme menu ── */
+#theme-menu{position:fixed;top:64px;right:max(14px,env(safe-area-inset-right));z-index:96;width:min(320px,calc(100vw - 24px));max-height:72vh;overflow:auto;
+  background:var(--panel);border:1px solid var(--line-strong);border-radius:var(--radius);
+  backdrop-filter:blur(22px) saturate(1.3);padding:12px;display:none;
+  box-shadow:0 20px 60px rgba(0,0,0,.5),0 0 40px rgba(var(--accent-rgb),calc(.12*var(--glow)))}
+#theme-menu.open{display:block;animation:menuin .28s cubic-bezier(.2,.9,.3,1.15) both}
+@keyframes menuin{from{opacity:0;transform:translateY(-10px) scale(.97)}to{opacity:1;transform:none}}
+#theme-menu .tm-title{font-family:var(--font-mono);font-size:10px;letter-spacing:.4em;color:var(--muted);
+  text-transform:uppercase;padding:4px 8px 10px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.tm-item{display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:calc(var(--radius)*.6);
+  cursor:pointer;border:1px solid transparent;transition:all .2s}
+.tm-item:hover{background:rgba(var(--accent-rgb),.08);border-color:var(--line)}
+.tm-item.on{background:rgba(var(--accent-rgb),.13);border-color:rgba(var(--accent-rgb),.4)}
+.tm-item .sw{width:22px;height:22px;border-radius:6px;flex:none;box-shadow:0 0 12px currentColor;border:1px solid rgba(255,255,255,.25)}
+.tm-item .nm{font-family:var(--font-head);font-weight:700;font-size:13px;letter-spacing:.06em}
+.tm-item .tg{font-family:var(--font-mono);font-size:9px;color:var(--muted);letter-spacing:.08em;margin-top:2px;text-transform:uppercase}
+.tm-item .key{margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--faint)}
+
+.wrap{position:relative;z-index:5;max-width:1640px;margin:0 auto;
+  padding:16px max(clamp(10px,2.4vw,26px),env(safe-area-inset-right)) 64px max(clamp(10px,2.4vw,26px),env(safe-area-inset-left))}
+/* Header is a 3-column grid, never a wrapping flex row: the brand column
+   absorbs all slack (its hostline ellipsizes) so the KPI tiles and buttons
+   stay on one line no matter how wide the live values get. */
+header.top{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"brand kpis btns";
+  align-items:center;gap:10px 14px;margin-bottom:14px}
+.brand{grid-area:brand;display:flex;align-items:center;gap:12px;min-width:0}
+.brand .dot{width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 18px var(--accent),0 0 4px #fff inset;animation:pulse 1.6s infinite;flex:none}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.25);opacity:.7}}
+.brand h1{margin:0;font-size:19px;letter-spacing:.5px;font-weight:800;font-family:var(--font-display);white-space:nowrap}
+.brand h1 span{color:var(--accent);text-shadow:0 0 16px rgba(var(--accent-rgb),calc(.6*var(--glow)))}
+.brand h1 .hostname{color:var(--text);text-shadow:none;font-weight:800}
+.brand h1 .hostname:not(:empty)::before{content:" · "}
+/* Hostline segments are flex items in a one-line-high wrapping row: when the
+   brand column gets tight, trailing segments wrap out of view whole instead
+   of an ellipsis chopping the timestamp mid-digit. */
+.brand .sub{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;
+  display:flex;flex-wrap:wrap;align-items:center;column-gap:5px;line-height:1.3;max-height:1.3em;overflow:hidden}
+.brand .sub .live-dot{margin-right:1px}
+#hostline{display:contents}
+#hostline span{flex:none;white-space:nowrap}
+.hdr-btns{grid-area:btns;display:flex;align-items:center;gap:8px}
+.kpis{grid-area:kpis;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;min-width:0}
+.kpi{
+  background:var(--panel);border:1px solid var(--line);border-radius:calc(var(--radius)*.85);padding:8px 12px;flex:none;
+  backdrop-filter:blur(14px);position:relative;overflow:hidden;
+  transition:background-color .7s,border-color .7s
+}
+.kpi::after{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 40%,rgba(255,255,255,.05) 50%,transparent 60%);
+  animation:shine 5s linear infinite;will-change:transform;pointer-events:none}
+@keyframes shine{from{transform:translate3d(100%,0,0)}to{transform:translate3d(-100%,0,0)}}
+.kpi .lbl{font-family:var(--mono);font-size:9px;letter-spacing:1.3px;color:var(--muted);text-transform:uppercase;white-space:nowrap}
+.kpi .val{font-family:var(--mono);font-size:18px;font-weight:700;line-height:1.1;margin-top:2px;transition:color .7s;
+  white-space:nowrap;font-variant-numeric:tabular-nums;transform-origin:left center}
+/* Invisible sizer holding the widest value fmt() can emit ("888.8" + unit):
+   the tile's width comes from it, so live digits never resize the tile. */
+.kpi .val.sz{visibility:hidden;height:0;margin:0;overflow:hidden;padding-right:4px;pointer-events:none}
+.kpi .unit{font-size:10px;color:var(--muted);margin-left:3px;font-weight:500}
+.kpi.c-accent .val{color:var(--accent);text-shadow:0 0 18px rgba(var(--accent-rgb),calc(.4*var(--glow)))}
+.kpi.c-accent2 .val{color:var(--accent2);text-shadow:0 0 18px rgba(var(--accent2-rgb),calc(.4*var(--glow)))}
+.kpi.c-info .val{color:var(--info);text-shadow:0 0 18px rgba(var(--info-rgb),calc(.35*var(--glow)))}
+.kpi.c-warn .val{color:var(--warn);text-shadow:0 0 18px rgba(var(--warn-rgb),calc(.35*var(--glow)))}
+.kpi.c-crit .val{color:var(--crit);text-shadow:0 0 18px rgba(var(--crit-rgb),calc(.35*var(--glow)))}
+.kpi.c-good .val{color:var(--good);text-shadow:0 0 18px rgba(var(--good-rgb),calc(.35*var(--glow)))}
+.kpi.bump .val{animation:bump .45s cubic-bezier(.2,.9,.3,1.4)}
+@keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.06)}100%{transform:scale(1)}}
+
+.btn{
+  font-family:var(--font-mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--text);background:var(--panel);border:1px solid var(--line-strong);border-radius:calc(var(--radius)*.85);
+  padding:10px 13px;cursor:pointer;backdrop-filter:blur(14px);transition:all .25s;user-select:none;white-space:nowrap;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent
+}
+.btn:hover{border-color:rgba(var(--accent-rgb),.6);color:var(--accent);
+  box-shadow:0 0 24px rgba(var(--accent-rgb),calc(.25*var(--glow)));transform:translateY(-1px)}
+.btn:active{transform:scale(.97)}
+.btn .k{color:var(--faint);margin-left:6px}
+.btn.icon{padding:10px 11px;letter-spacing:0}
+.btn.icon svg{display:block}
+.btn.on{color:var(--accent);border-color:rgba(var(--accent-rgb),.55);box-shadow:0 0 18px rgba(var(--accent-rgb),calc(.3*var(--glow)))}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);backdrop-filter:blur(14px);position:relative;overflow:hidden;
+  transition:background-color .7s,border-color .7s,border-radius .5s}
+.panel::before{content:"";position:absolute;inset:0;border-radius:var(--radius);pointer-events:none;background:linear-gradient(160deg,rgba(255,255,255,.04),transparent 50%)}
+
+.section-title{display:flex;align-items:center;gap:9px;font-family:var(--font-head);font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin:0 0 8px 0;font-weight:600}
+.section-title::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+/* flow mode: the deck is transparent to layout (charts, title, models stack as before) */
+.deck{display:contents}
+
+.models-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:12px;margin-bottom:14px}
+.models-grid:not(.ready){min-height:300px}
+.model-card{padding:13px 15px 11px;position:relative;transition:transform .25s ease}
+.model-card:hover{transform:translateY(-2px)}
+.model-card .head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.model-card .ident{display:flex;gap:10px;align-items:center;min-width:0}
+.model-card .crest{flex:none;width:38px;height:38px;border-radius:calc(var(--radius)*.7);display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-display);font-weight:800;font-size:19px;color:var(--accent);
+  background:radial-gradient(circle at 32% 28%,rgba(var(--accent-rgb),.30),rgba(var(--accent-rgb),.05) 72%);
+  border:1px solid rgba(var(--accent-rgb),.45);text-shadow:0 0 10px rgba(var(--accent-rgb),.9);
+  box-shadow:0 0 20px rgba(var(--accent-rgb),calc(.25*var(--glow))),inset 0 0 14px rgba(var(--accent-rgb),.12)}
+.model-card.healthy .crest{animation:crestbreathe 3.4s ease-in-out infinite}
+@keyframes crestbreathe{0%,100%{box-shadow:0 0 14px rgba(var(--accent-rgb),calc(.18*var(--glow))),inset 0 0 12px rgba(var(--accent-rgb),.10)}
+  50%{box-shadow:0 0 26px rgba(var(--accent-rgb),calc(.4*var(--glow))),inset 0 0 18px rgba(var(--accent-rgb),.2)}}
+.model-card .ident-tx{min-width:0}
+.model-card .name{font-weight:800;font-size:15.5px;font-family:var(--font-head);line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.model-card .lineage{font-family:var(--mono);font-size:9.5px;color:var(--muted);letter-spacing:.8px;margin-top:3px;text-transform:uppercase;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.model-card .lineage b{color:var(--accent);font-weight:700}
+.model-card .lineage i{color:var(--faint);font-style:normal}
+.model-card .head-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 1 auto;min-width:0;max-width:55%}
+.model-card .status{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:1.2px;text-transform:uppercase}
+.model-card .status .blip{width:8px;height:8px;border-radius:50%;background:var(--crit);box-shadow:0 0 8px var(--crit)}
+.model-card.healthy .status .blip{background:var(--good);box-shadow:0 0 10px var(--good);animation:pulse 1.4s infinite}
+.engine-badge{font-family:var(--mono);font-size:9px;letter-spacing:1px;padding:3px 9px;border-radius:999px;white-space:nowrap;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;
+  color:var(--accent2);border:1px solid rgba(var(--accent2-rgb),.4);background:rgba(var(--accent2-rgb),.07);text-transform:uppercase}
+.model-card .role{font-family:var(--mono);font-size:9.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:5px 0 7px}
+.model-card .meta{display:contents}
+.model-card .blurb{font-size:11px;line-height:1.45;color:var(--text);opacity:.85;font-style:italic;margin:0 0 8px;
+  border-left:2px solid rgba(var(--accent-rgb),.4);padding-left:10px}
+.model-card .blurb .src{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  color:var(--muted);font-style:normal;font-size:10.5px;line-height:1.4;margin-top:3px}
+.model-card .served{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:7px;display:flex;flex-wrap:wrap;gap:5px}
+.model-card .served .tag{padding:2px 7px;border-radius:calc(var(--radius)*.4);background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.specs{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;margin-bottom:8px}
+.spec{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:calc(var(--radius)*.5);padding:7px 9px 6px;min-width:0;
+  position:relative;overflow:hidden;transition:border-color .5s}
+body.theme-light .spec{background:rgba(255,255,255,.4)}
+.spec::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 42%,rgba(var(--accent-rgb),.06) 50%,transparent 58%);
+  animation:shine 7s linear infinite;will-change:transform;pointer-events:none}
+.spec .v{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spec .v b{color:var(--accent);font-weight:700;text-shadow:0 0 12px rgba(var(--accent-rgb),calc(.4*var(--glow)))}
+.spec .l{font-family:var(--mono);font-size:8.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spec.live{border-color:rgba(var(--accent-rgb),.22)}
+.spec.live .v{color:var(--accent)}
+.model-card .stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.model-card .stat .v{font-family:var(--mono);font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.model-card .stat .l{font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.model-card .spark{margin-top:8px;height:28px;display:block;width:100%}
+.model-card .accent-bar{position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:var(--radius) 0 0 var(--radius);
+  background:linear-gradient(180deg,var(--accent),var(--accent2),var(--accent));background-size:100% 250%;animation:accflow 7s linear infinite}
+@keyframes accflow{0%{background-position:0 0}100%{background-position:0 250%}}
+.model-card.sniffed .status .blip{background:var(--info);box-shadow:0 0 10px var(--info);animation:pulse 2s infinite}
+.model-card.sniffed.loading .status .blip{background:var(--warn);box-shadow:0 0 10px var(--warn);animation:pulse .8s infinite}
+.model-card.sniffed.boot-failed .status .blip{background:var(--crit);box-shadow:0 0 10px var(--crit);animation:none}
+.model-card.sniffed.boot-failed .status{color:var(--crit)}
+.model-card.sniffed.boot-ready .status .blip{background:var(--good);box-shadow:0 0 10px var(--good);animation:pulse 1.4s infinite}
+.model-card.sniffed .crest{color:var(--info);border-color:rgba(var(--info-rgb),.45);
+  background:radial-gradient(circle at 32% 28%,rgba(var(--info-rgb),.28),rgba(var(--info-rgb),.05) 72%);
+  text-shadow:0 0 10px rgba(var(--info-rgb),.9);
+  box-shadow:0 0 18px rgba(var(--info-rgb),calc(.22*var(--glow))),inset 0 0 12px rgba(var(--info-rgb),.12)}
+.model-card.sniffed .accent-bar{background:linear-gradient(180deg,var(--info),var(--accent),var(--info));background-size:100% 250%;animation:accflow 7s linear infinite}
+.model-card.sniffed .engine-badge{color:var(--info);border-color:rgba(var(--info-rgb),.4);background:rgba(var(--info-rgb),.07)}
+/* ── model-load progress ── */
+.loadprog{margin:2px 0 10px;padding:10px 12px;background:rgba(var(--warn-rgb),.05);
+  border:1px solid rgba(var(--warn-rgb),.22);border-radius:calc(var(--radius)*.5)}
+.loadprog .stages{display:flex;gap:6px;margin-bottom:9px}
+.loadprog .stage{flex:1;text-align:center;font-family:var(--mono);font-size:8.5px;letter-spacing:1.2px;
+  text-transform:uppercase;color:var(--faint);padding-top:5px;border-top:2px solid var(--line);
+  transition:color .4s,border-color .4s}
+.loadprog .stage.done{color:var(--good);border-top-color:var(--good)}
+.loadprog .stage.on{color:var(--warn);border-top-color:var(--warn);animation:pulse 1.3s infinite}
+.loadprog .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:7px}
+.loadprog .track{position:relative;flex:1;height:12px;background:rgba(255,255,255,.05);border-radius:7px;overflow:hidden;border:1px solid var(--line)}
+body.theme-light .loadprog .track{background:rgba(0,0,0,.06)}
+.loadprog .fill{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:7px;
+  transition:width .8s cubic-bezier(.25,.8,.25,1);background:linear-gradient(90deg,var(--warn),var(--accent2))}
+.loadprog .fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);
+  animation:slide 1.6s linear infinite;will-change:transform}
+.loadprog .fill.indet{width:35%;animation:indet 1.6s ease-in-out infinite}
+@keyframes indet{0%{left:0}50%{left:65%}100%{left:0}}
+.loadprog .pct{font-family:var(--mono);font-weight:800;font-size:17px;color:var(--warn);min-width:48px;
+  text-align:right;text-shadow:0 0 12px rgba(var(--warn-rgb),calc(.5*var(--glow)))}
+.loadprog .detail{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px}
+.loadprog .specs{margin-bottom:0}
+/* ── launch sequence ── */
+.lp-top{display:flex;align-items:baseline;gap:10px;margin-bottom:8px;min-width:0}
+.lp-clock{flex:none;font-family:var(--mono);display:flex;align-items:baseline;gap:8px}
+.lp-clock .tp{font-size:17px;font-weight:800;color:var(--warn);letter-spacing:.5px;font-variant-numeric:tabular-nums;text-shadow:0 0 12px rgba(var(--warn-rgb),calc(.5*var(--glow)))}
+.lp-clock .eta{font-size:9.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;white-space:nowrap}
+.model-card.boot-ready .lp-clock .tp{color:var(--good);text-shadow:0 0 12px rgba(var(--good-rgb),calc(.5*var(--glow)))}
+.model-card.boot-failed .lp-clock .tp{color:var(--crit);text-shadow:0 0 12px rgba(var(--crit-rgb),calc(.5*var(--glow)))}
+.lp-plan{display:flex;flex-wrap:wrap;gap:4px;min-width:0;justify-content:flex-end;flex:1 1 auto;overflow:hidden;max-height:3.4em}
+.lp-plan span{font-family:var(--mono);font-size:8.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);padding:2px 7px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.03);white-space:nowrap}
+.lp-plan span b{color:var(--accent2);font-weight:700}
+.lp-plan span i{font-style:normal;color:var(--faint);text-transform:none}
+.loadprog .stage{position:relative;overflow:hidden}
+.loadprog .stage .sn{letter-spacing:1.2px}
+.loadprog .stage .sd{font-size:9.5px;color:var(--text);letter-spacing:.3px;margin-top:3px;text-transform:none;font-weight:700;font-variant-numeric:tabular-nums}
+.loadprog .stage .sd i{font-style:normal;color:var(--faint);font-weight:500;margin-left:5px;font-size:8.5px}
+.loadprog .stage.done .sd{color:var(--good)}
+.loadprog .stage.on .sd{color:var(--warn)}
+.loadprog .stage.on::before{content:"";position:absolute;left:0;top:-2px;height:2px;width:var(--p,0%);background:var(--accent2);box-shadow:0 0 8px var(--accent2);transition:width .8s ease}
+.loadprog .stage.fail{color:var(--crit);border-top-color:var(--crit);animation:none}
+.loadprog .stage.fail .sd{color:var(--crit)}
+.model-card.boot-failed .loadprog{border-color:rgba(var(--crit-rgb),.4);background:rgba(var(--crit-rgb),.05)}
+.model-card.boot-failed .loadprog .fill{background:linear-gradient(90deg,var(--crit),var(--crit))}
+.model-card.boot-failed .loadprog .pct{color:var(--crit)}
+.model-card.boot-failed .loadprog .detail{color:var(--crit);text-transform:none;letter-spacing:0;font-size:10.5px}
+.model-card.boot-ready .loadprog{border-color:rgba(var(--good-rgb),.35);background:rgba(var(--good-rgb),.05)}
+.model-card.boot-ready .loadprog .fill{background:linear-gradient(90deg,var(--good),var(--accent))}
+.model-card.boot-ready .loadprog .pct{color:var(--good)}
+.lp-ranks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 14px;margin:0 0 8px;font-family:var(--mono)}
+.lp-ranks:empty{display:none}
+.lp-ranks .rk{display:flex;align-items:center;gap:7px;font-size:9.5px}
+.lp-ranks .rn{color:var(--muted);letter-spacing:1px;flex:none;width:18px}
+.lp-ranks .rt{flex:1;height:6px;border-radius:4px;background:rgba(255,255,255,.06);border:1px solid var(--line);overflow:hidden;position:relative}
+.lp-ranks .rf{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,var(--info),var(--accent2));transition:width .6s ease;border-radius:4px}
+.lp-ranks .rv{flex:none;color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+.lp-ranks .rv i{font-style:normal;color:var(--faint);font-weight:500}
+.lp-warm{display:flex;flex-wrap:wrap;gap:4px 6px;margin:0 0 8px}
+.lp-warm:empty{display:none}
+.lp-warm .wk{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9px;letter-spacing:.6px;color:var(--faint);padding:2px 8px 2px 6px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+.lp-warm .wk em{font-style:normal;width:10px;text-align:center}
+.lp-warm .wk.ok{color:var(--text);border-color:rgba(var(--good-rgb),.35)} .lp-warm .wk.ok em{color:var(--good)}
+.lp-warm .wk.on{color:var(--warn);border-color:rgba(var(--warn-rgb),.4)} .lp-warm .wk.on em{animation:spin 1.1s linear infinite;display:inline-block}
+.lp-warm .wk.warn{color:var(--warn)} .lp-warm .wk.err{color:var(--crit);border-color:rgba(var(--crit-rgb),.4)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.lp-log{margin-top:8px;font-family:var(--mono);font-size:9.5px;line-height:1.5;border-top:1px solid var(--line);padding-top:6px}
+.lp-log:empty{display:none}
+.lp-log .ln{display:flex;gap:8px;min-width:0;color:var(--muted)}
+.lp-log .lt{flex:none;color:var(--faint)}
+.lp-log .lv{flex:none;width:30px;color:var(--faint);letter-spacing:.5px}
+.lp-log .lg{flex:none;color:var(--faint);max-width:110px;overflow:hidden;text-overflow:ellipsis}
+.lp-log .lm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);opacity:.85}
+.lp-log .ln.WARNING .lv{color:var(--warn)} .lp-log .ln.ERROR .lv,.lp-log .ln.CRITICAL .lv{color:var(--crit)} .lp-log .ln.ERROR .lm{color:var(--crit);opacity:1}
+.lp-log .ln:last-child .lm{opacity:1}
+.gpu-grid:not(.ready){min-height:420px}
+.gpu-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(720px,100%),1fr));gap:12px}
+/* ── GPU card ──
+   .gc is one grid: id / tags / gauges / meters / procs placed by named areas, so
+   container queries can re-arrange the card without touching the DOM. Every
+   size inside is em off --fs; --sp is the speedo height (thermo = 1.12×). */
+.gpu-card{padding:0;display:block;content-visibility:auto;contain-intrinsic-size:auto 380px}
+.gc{--fs:11px;--pad:12px;--gap:10px;--sp:13em;--headH:2.6em;
+  font-size:var(--fs);height:100%;padding:var(--pad) calc(var(--pad) + 2px);min-height:0;position:relative;
+  display:grid;gap:var(--gap) calc(var(--gap)*1.4);
+  grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-areas:"id tags" "gauges right" "procs procs"}
+.gc .head{display:contents}
+.gpu-id{grid-area:id;display:flex;align-items:center;gap:.8em;min-width:0;min-height:var(--headH)}
+.gpu-id .num{font-family:var(--font-display);font-size:2.2em;font-weight:800;color:var(--accent);text-shadow:0 0 18px rgba(var(--accent-rgb),calc(.4*var(--glow)));line-height:1}
+.gpu-id .meta{display:flex;flex-direction:column;gap:.15em;min-width:0}
+.gpu-id .name{font-weight:700;font-size:1.15em;font-family:var(--font-head);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gpu-id .sub{font-family:var(--mono);font-size:.8em;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gc .tags{grid-area:tags;display:flex;align-items:center;align-self:center;justify-content:safe flex-end;gap:.35em .45em;min-width:0;overflow:hidden;flex-wrap:wrap}
+/* in the tall layout the tags share the auto column with the gauges: width:0 + min-width:100% keeps
+   the wrapped chip row from inflating that column (it lays out at the track width instead) */
+.gc .tags>*{flex:none}
+@media(max-width:980px){
+  body:not(.fit) .gc{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto auto auto;grid-template-areas:"id" "tags" "gauges" "right" "procs"}
+  body:not(.fit) .gc .tags{justify-content:center}
+}
+
+/* ── util speedo gauge ── */
+.gauges{grid-area:gauges;display:flex;align-items:center;justify-content:center;gap:.5em;min-width:0;align-self:center}
+.speedo{position:relative;flex:none;height:var(--sp);aspect-ratio:220/156}
+.speedo svg{width:100%;height:100%;display:block;overflow:visible}
+.speedo .sp-track{fill:none;stroke:rgba(255,255,255,.07);stroke-width:10;stroke-linecap:round}
+body.theme-light .speedo .sp-track{stroke:rgba(0,0,0,.09)}
+.speedo .sp-danger{fill:none;stroke:rgba(var(--crit-rgb),.30);stroke-width:10;stroke-linecap:round}
+.speedo .sp-fill{fill:none;stroke-width:10;stroke-linecap:round;
+  filter:drop-shadow(0 0 8px rgba(var(--accent-rgb),calc(.45*var(--glow))));
+  transition:stroke-dashoffset .25s cubic-bezier(.25,.8,.25,1),stroke .4s}
+.speedo .stick{stroke:var(--faint);stroke-width:1.1}
+.speedo .stick.maj{stroke:var(--muted);stroke-width:1.6}
+.speedo .slab{fill:var(--muted);font-family:var(--mono);font-size:8px;letter-spacing:.5px}
+.speedo .sp-needle{fill:var(--text);filter:drop-shadow(0 0 6px rgba(var(--accent-rgb),calc(.6*var(--glow))));
+  transform-box:view-box;transform-origin:110px 92px;transition:transform .28s cubic-bezier(.3,.9,.4,1.15)}
+.speedo .sp-hub{fill:var(--accent);stroke:rgba(255,255,255,.5);stroke-width:1.5;filter:drop-shadow(0 0 8px rgba(var(--accent-rgb),.8));transition:fill .4s}
+.speedo .sp-tip{fill:#fff;filter:drop-shadow(0 0 7px rgba(var(--accent-rgb),.9))}
+.speedo .sp-peak{stroke:var(--accent2);stroke-width:2;opacity:.85;transform-box:view-box;transform-origin:110px 92px;transition:transform .4s}
+.speedo .sp-big{fill:var(--text);font-family:var(--mono);font-size:27px;font-weight:800;letter-spacing:-1px;transition:fill .4s}
+.speedo .sp-lbl{fill:var(--muted);font-family:var(--mono);font-size:8px;letter-spacing:2.5px;text-transform:uppercase}
+.speedo.hotu .sp-big{fill:var(--warn)}
+.speedo.critu .sp-big{fill:var(--crit)}
+.speedo.critu .sp-hub{fill:var(--crit)}
+
+/* ── thermometer ── */
+.thermo{position:relative;flex:none;text-align:center;display:flex;flex-direction:column;align-items:center}
+.thermo svg{height:calc(var(--sp)*1.12);aspect-ratio:62/206;width:auto;display:block;overflow:visible;transition:filter .8s}
+.thermo .glass{fill:rgba(255,255,255,.04);stroke:var(--line-strong);stroke-width:1.2}
+body.theme-light .thermo .glass{fill:rgba(0,0,0,.05)}
+.thermo .merc,.thermo .mercclip{transition:y .7s cubic-bezier(.3,.9,.35,1),height .7s cubic-bezier(.3,.9,.35,1)}
+.thermo .merc{filter:drop-shadow(0 0 5px rgba(var(--good-rgb),calc(.5*var(--glow))))}
+.thermo.warm .merc{filter:drop-shadow(0 0 5px rgba(var(--warn-rgb),calc(.35*var(--glow))))}
+.thermo.hot .merc{filter:drop-shadow(0 0 7px rgba(var(--warn-rgb),calc(.6*var(--glow))))}
+.thermo.fire .merc{filter:drop-shadow(0 0 9px rgba(var(--crit-rgb),calc(.75*var(--glow))))}
+.thermo .bulb{transition:fill .8s}
+.thermo .meniscus{fill:rgba(255,255,255,.5);transition:cy .7s cubic-bezier(.3,.9,.35,1)}
+.thermo .tick{stroke:var(--faint);stroke-width:1;opacity:.8}
+.thermo .tick.maj{stroke:var(--muted);stroke-width:1.2}
+.thermo .tlab{fill:var(--muted);font-family:var(--mono);font-size:6.5px;letter-spacing:.4px}
+.thermo .tcrit{stroke:var(--crit);stroke-width:.8;stroke-dasharray:2 2;opacity:.5}
+.thermo .bub{fill:rgba(255,255,255,.8);opacity:0}
+.thermo.hot .bub,.thermo.fire .bub{animation:bubrise 3.1s linear infinite}
+.thermo .bub.b2{animation-delay:1.15s;animation-duration:3.7s}
+.thermo .bub.b3{animation-delay:2.1s;animation-duration:2.6s}
+@keyframes bubrise{0%{transform:translateY(0);opacity:0}10%{opacity:.9}80%{opacity:.5}100%{transform:translateY(-142px);opacity:0}}
+.thermo.fire svg{filter:drop-shadow(0 0 12px rgba(var(--crit-rgb),.5));animation:thermopulse 1.5s ease-in-out infinite}
+@keyframes thermopulse{0%,100%{opacity:1}50%{opacity:.82}}
+.thermo .t-read{font-family:var(--mono);font-size:1.25em;font-weight:800;margin-top:.1em;line-height:1;transition:color .6s;white-space:nowrap}
+.thermo .t-read .u{font-size:.68em;color:var(--muted);font-weight:500;margin-left:1px}
+.thermo .t-read .trend{font-size:.75em;margin-left:3px;position:absolute}
+.thermo .t-lbl{font-family:var(--mono);font-size:.68em;letter-spacing:1.6px;color:var(--muted);text-transform:uppercase;margin-top:.25em;line-height:1}
+.thermo.cool .t-read{color:var(--good)}
+.thermo.warm .t-read{color:var(--text)}
+.thermo.hot .t-read{color:var(--warn)}
+.thermo.fire .t-read{color:var(--crit);animation:thermopulse 1.5s ease-in-out infinite}
+
+/* ── tags: PCIe link, AER, clocks, p-state, fan, tps, model ── */
+.pcie-link{display:inline-flex;align-items:center;gap:.45em;font-family:var(--mono);font-size:.88em;letter-spacing:.3px;background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:999px;padding:0 .75em;height:2.3em;line-height:1;white-space:nowrap}
+.pcie-link{background:linear-gradient(90deg,rgba(var(--accent-rgb),.22) var(--u,0%),transparent var(--u,0%)),rgba(255,255,255,.02)}
+.pcie-link .cap{color:var(--muted)}
+.pcie-link .cap strong{color:var(--text);font-weight:700}
+.pcie-link .state{color:var(--muted);padding-left:.6em;border-left:1px solid var(--line)}
+.pcie-link.amber .state{color:var(--warn);text-shadow:0 0 8px rgba(var(--warn-rgb),.3)}
+.pcie-link.amber{border-color:rgba(var(--warn-rgb),.3);background:rgba(var(--warn-rgb),.05)}
+.pcie-link.red .state{color:var(--crit);text-shadow:0 0 8px rgba(var(--crit-rgb),.3)}
+.pcie-link.red{border-color:rgba(var(--crit-rgb),.4);background:rgba(var(--crit-rgb),.05)}
+.pcie-aer{display:inline-flex;align-items:center;gap:.4em;font-family:var(--mono);font-size:.82em;height:2.3em;white-space:nowrap}
+.pcie-aer:empty{display:none}
+.aer-clean{color:var(--faint);display:inline-flex;align-items:center;gap:.4em;letter-spacing:1px;text-transform:uppercase}
+.aer-clean svg{color:var(--good);opacity:.5}
+.aer-err.fatal{color:var(--crit);background:rgba(var(--crit-rgb),.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(var(--crit-rgb),.3);font-weight:700}
+.aer-list{display:inline-flex;gap:.5em;background:rgba(255,255,255,.02);border:1px solid var(--line);padding:2px 8px;border-radius:6px;color:var(--muted)}
+.aer-k{color:var(--text);opacity:.7}
+.aer-v{color:var(--warn);font-weight:700}
+.aer-sep{color:var(--faint)}
+.gpu-card.pcie-degraded{border-color:rgba(var(--crit-rgb),.5);animation:pcie-pulse 3s ease-in-out infinite}
+@keyframes pcie-pulse{0%,100%{box-shadow:0 0 15px rgba(var(--crit-rgb),.15),inset 0 0 10px rgba(var(--crit-rgb),.05)}50%{box-shadow:0 0 30px rgba(var(--crit-rgb),.3),inset 0 0 20px rgba(var(--crit-rgb),.1)}}
+.pcie-degraded-badge{display:none;position:absolute;top:0;left:50%;transform:translateX(-50%);background:var(--crit);color:#fff;font-family:var(--mono);font-size:10px;font-weight:800;letter-spacing:1.5px;padding:4px 14px;border-radius:0 0 8px 8px;box-shadow:0 4px 12px rgba(var(--crit-rgb),.4);text-transform:uppercase;z-index:10;white-space:nowrap}
+.gpu-card.pcie-degraded .pcie-degraded-badge{display:block}
+.chips,.chip-row{display:contents}
+.chip{font-family:var(--mono);font-size:.9em;line-height:1;height:2.3em;display:inline-flex;align-items:center;gap:.5em;padding:0 .75em;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--muted);letter-spacing:.4px;transition:color .5s,border-color .5s;white-space:nowrap}
+.chip b{color:var(--text);font-weight:700}
+.chip.spin{color:var(--info);border-color:rgba(255,255,255,.15)}
+.chip.tps{color:var(--accent2);border-color:rgba(var(--accent2-rgb),.3)}
+.chip.tps b{color:var(--accent2)}
+.chip.model{color:var(--accent);border-color:rgba(var(--accent-rgb),.35);flex:0 1 auto;min-width:min(8em,100%);display:block;line-height:2.3em;overflow:hidden;text-overflow:ellipsis}
+
+/* ── meter strips: thick live bar + history, one per metric, dividing the column ── */
+.right{grid-area:right;display:grid;gap:var(--gap);min-width:0;min-height:0}
+.meter{display:flex;flex-direction:column;gap:.35em;min-height:0;min-width:0;padding:.5em .85em .6em;
+  background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:calc(var(--radius)*.6);position:relative;overflow:hidden;
+  transition:border-color .5s}
+body.theme-light .meter{background:rgba(255,255,255,.35)}
+.meter .mh{display:flex;align-items:baseline;gap:.7em;flex:none;font-family:var(--mono);min-width:0}
+.meter .label{font-size:.85em;letter-spacing:1.3px;color:var(--muted);text-transform:uppercase;flex:none}
+.meter .pk{font-size:.78em;color:var(--faint);letter-spacing:.8px;flex:none;white-space:nowrap}
+.meter .value{font-size:1.1em;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-left:auto;min-width:0}
+.meter .track{position:relative;flex:none;height:.8em;background:rgba(255,255,255,.05);border-radius:999px;overflow:hidden;border:1px solid var(--line)}
+.meter .mh .pk{margin-left:.2em}
+body.theme-light .meter .track{background:rgba(0,0,0,.06)}
+.meter .fill{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:999px;transition:width .22s cubic-bezier(.25,.8,.25,1);
+  background:linear-gradient(90deg,var(--accent),var(--accent2));box-shadow:0 0 10px rgba(var(--accent-rgb),calc(.35*var(--glow)))}
+.meter .fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);animation:slide 2.2s linear infinite;will-change:transform}
+@keyframes slide{from{transform:translate3d(-100%,0,0)}to{transform:translate3d(100%,0,0)}}
+.meter.mem .fill{background:linear-gradient(90deg,var(--info),var(--accent2));box-shadow:0 0 10px rgba(var(--info-rgb),calc(.35*var(--glow)))}
+.meter.power .fill{background:linear-gradient(90deg,var(--accent2),var(--warn) 80%,var(--crit));box-shadow:0 0 10px rgba(var(--warn-rgb),calc(.35*var(--glow)))}
+.meter.util .fill{background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.meter.temp .fill{background:linear-gradient(90deg,var(--good),var(--warn) 70%,var(--crit));box-shadow:0 0 10px rgba(var(--good-rgb),calc(.3*var(--glow)))}
+.meter.hot{border-color:rgba(var(--warn-rgb),.35)}
+.meter.crit{border-color:rgba(var(--crit-rgb),.45)}
+.meter .hist{display:block;width:100%;height:2.6em;flex:1 1 auto;min-height:0}
+
+/* process list: full table in flow mode, one chip line in fit mode */
+.procs{grid-area:procs;min-height:6em;max-height:14.5em;overflow:auto;scrollbar-width:thin;min-width:0}
+.procs table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.95em}
+.procs th{text-align:left;color:var(--muted);font-weight:500;letter-spacing:1.2px;text-transform:uppercase;font-size:.8em;padding:.5em .4em;border-bottom:1px solid var(--line);
+  position:sticky;top:0;background:var(--void);background:color-mix(in srgb,var(--void) 80%,transparent);backdrop-filter:blur(6px)}
+.procs td{padding:.4em;border-bottom:1px solid var(--line)}
+.procs td.mem{color:var(--accent);font-weight:700;text-align:right;white-space:nowrap}
+.procs td.pid{color:var(--muted)}
+.procs tr:hover td{background:rgba(var(--accent-rgb),.04)}
+.procs-line{display:none;align-items:center;gap:.5em;height:2.3em;overflow:hidden;font-family:var(--mono);font-size:.9em}
+.procs-line .pl{flex:none;color:var(--faint);letter-spacing:1.2px;text-transform:uppercase;font-size:.85em;margin-right:.2em}
+.pchip{flex:0 1 auto;min-width:0;display:inline-flex;align-items:center;gap:.6em;height:2.3em;padding:0 .9em;border-radius:999px;background:rgba(255,255,255,.03);border:1px solid var(--line);color:var(--text);white-space:nowrap;letter-spacing:.3px}
+.pchip .pn{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.pchip b{color:var(--accent);font-weight:700;flex:none}
+.pchip.none{color:var(--faint);border-style:dashed}
+.pchip.more{flex:none;color:var(--muted)}
+
+.global-charts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.chart-card{padding:10px 13px}
+.chart-card .h{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px}
+.chart-card .h .title{font-family:var(--font-head);font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chart-card .h .now{font-family:var(--mono);font-size:14px;font-weight:700;min-width:70px;text-align:right;white-space:nowrap}
+.chart-card canvas{display:block;width:100%;height:84px}
+/* ── hero: total throughput ── */
+.chart-card.hero{overflow:hidden;--f:0}
+.chart-card.hero .h{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;margin-bottom:2px;gap:10px}
+.chart-card.hero .h>div:first-child{min-width:0}
+.chart-card.hero .now{font-family:var(--mono);font-size:clamp(22px,3.3vh,40px);flex:none;white-space:nowrap;font-weight:800;letter-spacing:-1px;line-height:1;
+  color:color-mix(in srgb,var(--text) calc(100% - var(--f)*45%),#fff);min-width:0;text-align:right;font-variant-numeric:tabular-nums;
+  text-shadow:0 0 calc(6px + var(--f)*30px) rgba(var(--accent-rgb),calc((.25 + var(--f)*.75)*var(--glow))),0 0 4px rgba(var(--accent-rgb),calc(var(--f)*.9*var(--glow)));
+  transition:color .6s}
+.chart-card.hero .now .unit{font-size:.36em;color:var(--muted);margin-left:.3em;font-weight:600;letter-spacing:0;vertical-align:baseline}
+.hero-sub{display:flex;gap:8px;flex-wrap:nowrap;overflow:hidden;white-space:nowrap;font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--faint);margin-top:4px;
+  mask-image:linear-gradient(90deg,#000 calc(100% - 16px),transparent);-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 16px),transparent)}
+.hero-sub b{color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums}
+.hero-sub span:nth-child(3) b{color:var(--accent2)}
+.hero-sub span:nth-child(4) b{color:var(--text)}
+#tps-fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;mix-blend-mode:screen}
+body.theme-light #tps-fx{mix-blend-mode:multiply;opacity:.5}
+.chart-card.hero::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  box-shadow:inset 0 0 calc(var(--f)*60px) rgba(var(--accent-rgb),calc(var(--f)*.18*var(--glow)));transition:box-shadow .6s}
+.kpi.c-accent .val{text-shadow:0 0 calc(12px + var(--f,0)*26px) rgba(var(--accent-rgb),calc((.4 + var(--f,0)*.6)*var(--glow)))}
+
+footer{margin-top:18px;text-align:center;font-family:var(--mono);font-size:9px;color:var(--faint);letter-spacing:1.5px;text-transform:uppercase}
+footer b{color:var(--muted);font-weight:500}
+
+.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 10px var(--good);animation:pulse 1.2s infinite;margin-right:6px;vertical-align:middle}
+
+/* ── responsive: foldables / phones / portrait monitors ── */
+@media(max-width:1240px){
+  header.top{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand btns" "kpis kpis"}
+  .kpis{justify-content:flex-start}
+}
+@media(max-width:820px){
+  .brand h1{font-size:17px}
+}
+@media(max-height:520px){#ev-feed{display:none}}
+@media(max-width:700px){
+  .wrap{padding-top:10px;padding-bottom:44px}
+  header.top{margin-bottom:10px;gap:8px}
+  .brand h1{font-size:16px}
+  .brand .sub{font-size:8.5px}
+  /* five equal tracks share the row; tiles shrink and clip instead of wrapping */
+  .kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+  .kpi{min-width:0;padding:6px 7px}
+  .kpi .val{font-size:13px}
+  .kpi .val.sz{display:none}
+  .kpi .unit{font-size:8px;margin-left:2px}
+  .kpi .lbl{font-size:7px;letter-spacing:.7px;overflow:hidden;text-overflow:ellipsis}
+  #btn-theme-name,.btn .k{display:none}
+  .global-charts{gap:8px}
+  .chart-card canvas{height:60px}
+  .chart-card .h .now{font-size:12px;min-width:0}
+  .models-grid,.gpu-grid{gap:10px}
+  .model-card .stats{gap:4px}
+  .model-card .stat .v{font-size:12.5px}
+  .specs{grid-template-columns:repeat(auto-fill,minmax(82px,1fr))}
+  .gpu-card{padding:11px 10px;gap:10px}
+  .speedo{max-width:210px}
+  .spark-row{gap:6px}
+  .section-title{margin-bottom:6px}
+  #wp-toast .t2{letter-spacing:.28em;font-size:10px}
+  footer{font-size:8px;letter-spacing:1px}
+}
+@media(max-width:560px){.spark-row{grid-template-columns:1fr 1fr}}
+/* candybar phones: tiles are ~60-75px, so the unit moves up under the label
+   ("TOTAL / TOK/S") and the value keeps its digits instead of clipping them */
+@media(max-width:460px){
+  .kpi .unit{display:none}
+  .kpi .lbl::after{content:attr(data-unit);display:block;opacity:.75}
+}
+/* touch devices: calmer effects, no hover motion, no kbd hints */
+body.touch .btn .k,body.touch .kbd-hint,body.touch .tm-item .key{display:none}
+body.touch .panel,body.touch .kpi,body.touch .btn{backdrop-filter:blur(9px)}
+body.touch #theme-menu{backdrop-filter:blur(14px) saturate(1.3)}
+body.touch .kpi::after,body.touch .spec::after{animation:none}
+body.touch .model-card:hover,body.touch .btn:hover{transform:none}
+@media(prefers-reduced-motion:reduce){
+  .kpi::after,.spec::after,.bar .fill::after,.loadprog .fill::after,.model-card.healthy .crest,.accent-bar{animation:none}
+}
+
+/* ════════ FIT MODE ════════
+   body.fit: the dashboard becomes a single viewport-filling grid — header,
+   deck (models + cluster charts), GPU grid, footer — with no page scroll.
+   GPU cards are size containers; everything inside scales from the card's
+   own height/width (cq units), so 4 GPUs always fit whatever the tile size.
+   Engaged automatically on viewports ≥ 760×540, toggle with L / ⊞. */
+body.fit{overflow:hidden;height:100dvh}
+body.fit .wrap{height:100dvh;max-width:none;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;
+  gap:clamp(6px,1vh,10px);padding:clamp(6px,1vh,10px) clamp(8px,1.1vw,16px) clamp(4px,.7vh,8px)}
+body.fit header.top{margin:0}
+body.fit .deck{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,clamp(300px,32vw,1100px));gap:10px;align-items:stretch;min-height:0}
+body.fit .section-title{display:none}
+body.fit .global-charts{order:2;display:grid;grid-template-columns:1.55fr 1fr;gap:10px;margin:0;max-height:clamp(96px,17vh,190px);min-height:96px;align-self:stretch}
+body.fit .chart-card{display:flex;flex-direction:column;padding:8px 12px 9px;min-height:0}
+body.fit .chart-card .h{margin-bottom:4px;flex:none}
+body.fit .chart-card canvas{flex:1 1 auto;height:auto;min-height:40px}
+body.fit #tps-fx{flex:none;height:100%;position:absolute}
+body.fit .models-grid{display:flex;flex-wrap:wrap;gap:10px;margin:0;align-content:flex-start;
+  max-height:clamp(96px,34vh,420px);overflow:auto;scrollbar-width:thin;min-height:96px}
+body.fit .models-grid:not(.ready){min-height:96px}
+/* a boot in progress is the live story: let the band grow, the GPU cards adapt */
+body.fit .models-grid:has(.model-card.loading){max-height:clamp(200px,50vh,640px)}
+body.fit .models-grid.ready:empty{display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:var(--radius)}
+body.fit .models-grid.ready:empty::before{content:"no model weights resident";font-family:var(--mono);font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:var(--faint)}
+/* compact model card: identity + meta line left, live stats + spark right, load progress spans */
+body.fit .model-card{flex:1 1 440px;max-width:1300px;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,120px);grid-template-areas:"head stats spark" "meta stats spark" "prog prog prog";
+  column-gap:14px;row-gap:5px;padding:9px 14px 9px 16px;align-items:center}
+body.fit .model-card:hover{transform:none}
+body.fit .model-card .head{grid-area:head;align-items:center}
+body.fit .model-card .head-right{flex-direction:row;align-items:center;gap:8px;max-width:none}
+body.fit .model-card .crest{width:30px;height:30px;font-size:15px}
+body.fit .model-card .name{font-size:14px}
+body.fit .model-card .blurb{display:none}
+body.fit .model-card .meta{grid-area:meta;display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;white-space:nowrap;height:20px}
+body.fit .model-card .role{margin:0;flex:none}
+body.fit .model-card .served{margin:0;flex:none;flex-wrap:nowrap;gap:4px;font-size:9.5px}
+body.fit .model-card .served .tag{padding:1px 6px}
+body.fit .model-card .specs{display:flex;gap:4px;margin:0;flex:1 1 auto;min-width:0;overflow:hidden;mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}
+body.fit .model-card .spec{flex:none;display:inline-flex;align-items:baseline;gap:.45em;padding:1px 7px;border-radius:999px}
+body.fit .model-card .spec .v{font-size:10px}
+body.fit .model-card .spec .l{margin:0;font-size:8px}
+body.fit .model-card .spec::after{display:none}
+body.fit .model-card .stats{grid-area:stats;display:grid;grid-template-columns:repeat(6,auto);gap:0 12px;align-self:center}
+body.fit .model-card .stat{text-align:right}
+body.fit .model-card .stat .v{font-size:14px}
+body.fit .model-card .spark{grid-area:spark;margin:0;height:34px;width:100%;align-self:center}
+body.fit .model-card .loadprog{grid-area:prog;margin:2px 0 0;padding:7px 10px}
+body.fit .model-card .loadprog .stages{margin-bottom:6px}
+body.fit .model-card .loadprog .bar-row{margin-bottom:4px}
+body.fit .model-card .loadprog .detail{margin-bottom:5px}
+body.fit .model-card .loadprog .specs{display:flex}
+body.fit .model-card .lp-top{margin-bottom:5px}
+body.fit .model-card .lp-plan{flex-wrap:nowrap;max-height:none;justify-content:flex-start;mask-image:linear-gradient(90deg,#000 calc(100% - 30px),transparent);-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 30px),transparent)}
+body.fit .model-card .lp-ranks{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:5px}
+body.fit .model-card .lp-warm{margin-bottom:5px;max-height:3.6em;overflow:hidden}
+body.fit .model-card .lp-log{margin-top:5px;padding-top:4px}
+body.fit .model-card .lp-log .ln:nth-child(-n+3){display:none}
+body.fit .model-card .accent-bar{width:3px}
+@media(max-width:1100px){
+  body.fit .model-card{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"head stats" "meta stats" "prog prog"}
+  body.fit .model-card .spark{display:none}
+  /* narrow tiles: stack the two cluster charts so their titles stay whole */
+  body.fit .deck{grid-template-columns:minmax(0,1fr) minmax(0,clamp(210px,25vw,300px))}
+  body.fit .global-charts{grid-template-columns:1fr;grid-template-rows:1fr 1fr;min-height:150px;max-height:clamp(150px,26vh,260px)}
+}
+/* GPU grid: fills the remaining height; column count follows the tile's shape */
+body.fit .gpu-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:10px;min-height:0}
+body.fit .gpu-grid:not(.ready){min-height:0}
+@media(max-aspect-ratio:0.95){body.fit .gpu-grid{grid-template-columns:minmax(0,1fr)}}
+@media(min-aspect-ratio:2.3){body.fit .gpu-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+body.fit .gpu-card{container:gpu / size;content-visibility:visible;contain-intrinsic-size:auto;min-height:0}
+/* cq units resolve against the nearest ancestor container, so they live on .gc, not .gpu-card.
+   --sp: speedo height from the vertical budget (card − pads − head − procs − thermo readouts),
+   capped by width so the instruments never crowd the meters. */
+body.fit .gc{--fs:clamp(8px,min(3.1cqh,1.45cqw),14px);--pad:clamp(7px,2.4cqh,13px);--gap:clamp(5px,1.8cqh,10px);--headH:2.6em;
+  --budget:calc(100cqh - 2*var(--pad) - var(--headH) - 2.3em - 2*var(--gap) - 2.7em);
+  --sp:min(calc(var(--budget)/1.12),20em,19cqw)}
+body.fit .gc .tags{flex-wrap:nowrap;height:2.3em;align-self:center}
+body.fit .gauges{align-self:center}
+body.fit .right{grid-template-rows:repeat(4,minmax(0,1fr))}
+body.fit .meter{container:meter / size;padding:clamp(3px,6cqh,8px) .85em clamp(3px,7cqh,9px)}
+body.fit .meter .track{height:auto;flex:1 1 auto;min-height:5px;max-height:clamp(6px,18cqh,22px)}
+body.fit .meter .hist{height:auto;flex:6 1 0}
+/* cq units measure the content box: header ≈ 20px, so below 58px there is no room for a graph —
+   the bar then thickens to fill the strip instead */
+@container meter (max-height:58px){body.fit .meter .hist{display:none} body.fit .meter .track{max-height:clamp(6px,45cqh,26px)}}
+@container meter (max-width:240px){body.fit .meter .mh .pk{display:none}}
+/* short-but-wide cards: 2×2 meters so every strip keeps its history graph */
+@container gpu (max-height:560px) and (min-width:640px){body.fit .right{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr))}}
+body.fit .procs{min-height:0;max-height:none;overflow:hidden}
+body.fit .procs table{display:none}
+body.fit .procs-line{display:flex}
+/* tall cards: hardware tags leave the head row and fill the space under the instruments */
+@container gpu (min-height:330px) and (orientation:landscape){
+  body.fit .gc{grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-areas:"id id" "gauges right" "tags right" "procs procs";
+    --budget:calc(100cqh - 2*var(--pad) - var(--headH) - 2.3em - 3*var(--gap) - 2.7em - 8em);--sp:min(calc(var(--budget)/1.12),20em,22cqw)}
+  body.fit .gc .tags{flex-wrap:wrap;height:auto;align-self:start;align-content:flex-start;justify-content:center;width:0;min-width:100%;
+    mask-image:linear-gradient(#000 calc(100% - 1.2em),transparent);-webkit-mask-image:linear-gradient(#000 calc(100% - 1.2em),transparent)}
+  body.fit .gpu-id .name{font-size:1.35em}
+  body.fit .gpu-id .sub{font-size:.9em}
+  body.fit .gauges{align-self:start}
+}
+/* portrait cards (4-across on ultrawide): instruments on top, tags, then the meters stacked */
+@container gpu (orientation:portrait){
+  body.fit .gc{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto minmax(0,1fr) auto;grid-template-areas:"id" "gauges" "tags" "right" "procs";
+    --sp:min(34cqw,22cqh)}
+  body.fit .gc .tags{flex-wrap:wrap;height:auto;justify-content:center}
+  body.fit .gauges{gap:1.2em}
+}
+@container gpu (max-height:240px){body.fit .meter .hist{display:none}}
+@container gpu (max-height:200px){body.fit .procs{display:none}}
+@container gpu (max-width:430px){body.fit .gpu-id .sub{display:none}}
+/* least informative tags go first when the head row is tight (AER errors always stay) */
+@container gpu (max-width:1000px) and (max-height:329px){body.fit .pcie-aer:has(> .aer-clean:only-child),body.fit .chip.fan{display:none}}
+body.fit footer{margin:0;font-size:8.5px;letter-spacing:1.2px}
+@media(max-height:760px){body.fit footer{display:none}}
+body.fit #ev-feed{bottom:max(14px,env(safe-area-inset-bottom))}
+</style>
+</head>
+<body>
+<canvas id="wp-a"></canvas>
+<canvas id="wp-b"></canvas>
+<div class="vig"></div>
+<div id="shift-sweep"></div>
+<div id="wp-toast"><div class="t1"></div><div class="t2"></div></div>
+<div id="ev-feed"></div>
+
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <div class="dot"></div>
+      <div style="min-width:0">
+        <h1>nv<span>top</span><span class="hostname" id="brand-host"></span></h1>
+        <div class="sub"><span class="live-dot"></span><span id="hostline"><span>—</span><span>· driver —</span><span>· cuda —</span><span>· uptime —</span></span></div>
+      </div>
+    </div>
+    <div class="kpis" id="kpis">
+      <div class="kpi c-accent"><div class="lbl" data-unit="tok/s">Total</div><div class="val" id="kpi-tps">0<span class="unit">tok/s</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div></div>
+      <div class="kpi c-info"><div class="lbl" data-unit="tok/s">Output</div><div class="val" id="kpi-out">0<span class="unit">tok/s</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div></div>
+      <div class="kpi c-accent2"><div class="lbl" data-unit="tok/s">Input</div><div class="val" id="kpi-in">0<span class="unit">tok/s</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div></div>
+      <div class="kpi c-warn"><div class="lbl" data-unit="%">GPU Util</div><div class="val" id="kpi-util">0<span class="unit">%</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div></div>
+      <div class="kpi c-crit"><div class="lbl" data-unit="W">Power</div><div class="val" id="kpi-pwr">0<span class="unit">W</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div></div>
+      <div class="kpi c-good"><div class="lbl" data-unit="kWh">Today</div><div class="val" id="kpi-kwh">0<span class="unit">kWh</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div></div>
+    </div>
+    <div class="hdr-btns">
+      <button class="btn icon" id="btn-fs" title="fullscreen (F)" aria-label="toggle fullscreen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg></button>
+      <button class="btn" id="btn-theme" title="click: theme menu · right-click / W: next theme">◈ <span id="btn-theme-name">THEME</span><span class="k">W</span></button>
+      <button class="btn icon" id="btn-layout" title="layout: fit to window / scrolling page (L)" aria-label="toggle fit layout"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 12h18"/><path d="M12 3v18"/></svg></button>
+      <button class="btn icon" id="btn-logout" title="log out">⏻</button>
+    </div>
+  </header>
+
+  <div class="deck">
+    <div class="global-charts">
+      <div class="panel chart-card hero" id="tps-hero">
+        <div class="h">
+          <div><div class="title">Total tok/s</div><div class="hero-sub" id="tps-sub"><span>↑<b>0</b></span><span>↓<b>0</b></span><span>pk <b>0</b></span><span>rec <b>0</b></span></div></div>
+          <div class="now" id="ch-tps-now">0<span class="unit">tok/s</span></div>
+        </div>
+        <canvas id="ch-tps"></canvas>
+        <canvas id="tps-fx" aria-hidden="true"></canvas>
+      </div>
+      <div class="panel chart-card">
+        <div class="h"><div class="title">Cluster util</div><div class="now" id="ch-util-now">0%</div></div>
+        <canvas id="ch-util"></canvas>
+      </div>
+    </div>
+
+    <div class="section-title">Models Being Served</div>
+    <div class="models-grid" id="models"></div>
+  </div>
+
+  <div class="section-title">GPUs</div>
+  <div class="gpu-grid" id="gpus"></div>
+
+  <footer>
+    <span id="ft-host">nvtop-web</span> · 4 Hz GPU · 1 Hz LLM · read-only telemetry · theme <b id="ft-theme">—</b><span class="kbd-hint"> · <b>W</b> shift · <b>S</b> menu · <b>F</b> fullscreen</span>
+  </footer>
+</div>
+
+<div id="theme-menu">
+  <div class="tm-title">◈ Interface Themes</div>
+  <div class="tm-list"></div>
+</div>
+
+<script src="/static/themes/runner.js?v=20261031b"></script>
+<script>
+const ASSET_VER = '20261031b';
+const $ = (id) => document.getElementById(id);
+const setHTML = (el, html) => {
+  if (el.__nvtopHTML !== html){ el.innerHTML = html; el.__nvtopHTML = html; }
+};
+// Never wider than 5 characters ("999.9", "99.9k", "999k", "99.9M"): the KPI
+// tiles reserve exactly that much, so wider output would clip. Thresholds sit
+// just below the round-up points so toFixed() can't push a sixth character.
+const fmt = (n, d=0) => {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  const a = Math.abs(n);
+  if (a < 999.95) return (+n).toFixed(d);
+  if (a < 99950) return (n/1e3).toFixed(d>0?d:1) + 'k';
+  if (a < 999500) return (n/1e3).toFixed(0) + 'k';
+  if (a < 99.95e6) return (n/1e6).toFixed(1) + 'M';
+  return (n/1e6).toFixed(0) + 'M';
+};
+const fmtInt = (n) => fmt(n,0);
+const fmtCompact = (n) => {
+  if (n == null || isNaN(n)) return '0';
+  if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return String(n);
+};
+const fmtBytesMib = (m) => m >= 1024 ? (m/1024).toFixed(1)+' GiB' : Math.round(m)+' MiB';
+const fmtSecs = (s) => {
+  if (!s) return '—';
+  const d = Math.floor(s/86400); s%=86400;
+  const h = Math.floor(s/3600); s%=3600;
+  const m = Math.floor(s/60);
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  return `${m}m`;
+};
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtCtx = (n) => n >= 1048576 ? (n/1048576).toFixed(n % 1048576 ? 1 : 0) + 'M'
+  : n >= 1024 ? Math.round(n/1024) + 'k' : String(n);
+
+/* ════════ THEME ENGINE ════════ */
+const THEME_ORDER = ['oblivion','ares','k2049','muthur','jarvis','nightcity','arrakis','lumon','apex','construct','gargantua','thegrid','tokyo'];
+const DEFAULT_THEME = 'jarvis';
+const hexRgb = (h) => [0,2,4].map(i=>parseInt(h.replace('#','').slice(i,i+2),16)).join(',');
+
+/* live palette used by canvas chart drawing (kept in sync with CSS vars) */
+const UI = {
+  accent:'#57c8ff', accent2:'#ffc96b', info:'#57c8ff', good:'#48f5a7', warn:'#ffb84d', crit:'#ff4d68',
+  text:'#e8f2fa', muted:'#8a99a8', light:false,
+};
+
+const _fontLoaded = new Set();
+function loadGoogleFonts(fams){
+  const need = (fams || []).filter(f => !_fontLoaded.has(f));
+  if (!need.length) return;
+  need.forEach(f => _fontLoaded.add(f));
+  const l = document.createElement('link');
+  l.rel = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?' + need.map(f => 'family=' + f).join('&') + '&display=swap';
+  document.head.appendChild(l);
+}
+
+function applyTheme(t){
+  t = t || {};
+  const rs = document.documentElement.style;
+  const set = (k,v) => v && rs.setProperty(k, v);
+  UI.accent = t.accent || '#57c8ff';
+  UI.accent2 = t.accent2 || '#ffc96b';
+  UI.info = t.info || UI.accent;
+  UI.good = t.good || '#48f5a7';
+  UI.warn = t.warn || '#ffb84d';
+  UI.crit = t.crit || '#ff4d68';
+  UI.text = t.text || '#e8f2fa';
+  UI.muted = t.muted || '#8a99a8';
+  UI.light = !!t.light;
+  set('--accent', UI.accent);          set('--accent-rgb', hexRgb(UI.accent));
+  set('--accent2', UI.accent2);        set('--accent2-rgb', hexRgb(UI.accent2));
+  set('--info', UI.info);              set('--info-rgb', hexRgb(UI.info));
+  set('--good', UI.good);              set('--good-rgb', hexRgb(UI.good));
+  set('--warn', UI.warn);              set('--warn-rgb', hexRgb(UI.warn));
+  set('--crit', UI.crit);              set('--crit-rgb', hexRgb(UI.crit));
+  set('--text', UI.text);
+  set('--muted', UI.muted);
+  set('--faint', t.faint || '#51606e');
+  set('--void', t.void || '#030811');
+  set('--panel', t.panel || 'rgba(8,16,30,.55)');
+  set('--line', t.line || 'rgba(255,255,255,.08)');
+  rs.setProperty('--line-strong', t.line ? t.line.replace(/[\d.]+\)$/, m => Math.min(1, parseFloat(m)*2.2) + ')') : 'rgba(255,255,255,.18)');
+  set('--radius', t.radius || '16px');
+  rs.setProperty('--glow', UI.light ? '0.25' : '1');
+  loadGoogleFonts(t.googleFonts);
+  const fonts = t.fonts || {};
+  set('--font-display', fonts.display);
+  set('--font-head', fonts.head);
+  set('--font-mono', fonts.mono);
+  document.body.classList.toggle('theme-light', UI.light);
+  document.documentElement.style.colorScheme = UI.light ? 'light' : 'dark';
+  if (lastSnap) render(lastSnap, true); // recolor canvases
+}
+
+const Engine = (() => {
+  const layers = [$('wp-a'), $('wp-b')];
+  const layerRunners = [null, null];
+  let active = 0, currentId = null;
+  const runner = () => layerRunners[active];
+  const available = () => THEME_ORDER.filter(id => (window.NVTHEMES||{})[id]);
+
+  function toast(name, tag){
+    const t = $('wp-toast');
+    t.querySelector('.t1').textContent = name;
+    t.querySelector('.t2').textContent = tag || '';
+    t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
+  }
+  function sweep(){
+    const s = $('shift-sweep');
+    s.classList.remove('go'); void s.offsetWidth; s.classList.add('go');
+  }
+
+  function show(id, silent){
+    const th = (window.NVTHEMES||{})[id];
+    if (!th || !window.WallpaperRunner) return false;
+    if (id === currentId) return true;
+    const nextIdx = 1 - active;
+    // reclaim the target canvas from any previous tenant (context stays alive — NEVER loseContext here)
+    if (layerRunners[nextIdx]){ layerRunners[nextIdx].destroySoft(); layerRunners[nextIdx] = null; }
+    let r;
+    try { r = new WallpaperRunner(layers[nextIdx], th.frag, Object.assign({ scale:0.85 }, th.perf || {})); }
+    catch(e){ console.warn('theme shader failed:', id, e.message); return false; }
+    r.start();
+    r.pulse(0.7); // arrival pulse
+    layerRunners[nextIdx] = r;
+    layers[nextIdx].style.opacity = '1';
+    layers[active].style.opacity = '0';
+    const fadeIdx = active, fading = layerRunners[active];
+    setTimeout(() => { if (fading && layerRunners[fadeIdx] === fading && fadeIdx !== active) fading.stop(); }, 1300);
+    active = nextIdx; currentId = id;
+    try { localStorage.setItem('nvtop-theme', id); } catch(e){}
+    applyTheme(th.theme);
+    $('btn-theme-name').textContent = th.name;
+    $('ft-theme').textContent = th.name;
+    if (!silent){ toast(th.name, th.tag); sweep(); }
+    renderMenu();
+    return true;
+  }
+
+  function renderMenu(){
+    const m = $('theme-menu');
+    if (!m.classList.contains('open')) return;
+    m.querySelector('.tm-list').innerHTML = available().map((id, i) => {
+      const th = window.NVTHEMES[id];
+      const acc = (th.theme && th.theme.accent) || '#57c8ff';
+      return `<div class="tm-item ${id===currentId?'on':''}" data-id="${id}">
+        <span class="sw" style="background:${acc};color:${acc}"></span>
+        <span><div class="nm">${th.name}</div><div class="tg">${th.tag||''}</div></span>
+        <span class="key">${i+1}</span></div>`;
+    }).join('');
+  }
+  function toggleMenu(force){
+    const m = $('theme-menu');
+    m.classList.toggle('open', force != null ? force : !m.classList.contains('open'));
+    renderMenu();
+  }
+  $('theme-menu').addEventListener('click', e => {
+    const it = e.target.closest('.tm-item');
+    if (it) show(it.dataset.id);
+  });
+  document.addEventListener('click', e => {
+    const m = $('theme-menu');
+    if (m.classList.contains('open') && !m.contains(e.target) && !e.target.closest('#btn-theme')) toggleMenu(false);
+  });
+
+  function cycle(dir){
+    const list = available();
+    if (!list.length) return;
+    const i = (list.indexOf(currentId) + (dir||1) + list.length) % list.length;
+    show(list[i]);
+  }
+  function init(){
+    const list = available();
+    if (!list.length) return;
+    let saved = null;
+    try { saved = localStorage.getItem('nvtop-theme'); } catch(e){}
+    const fallback = list.includes(DEFAULT_THEME) ? DEFAULT_THEME : list[0];
+    show(list.includes(saved) ? saved : fallback, true);
+    $('btn-theme-name').textContent = (window.NVTHEMES[currentId]||{}).name || 'THEME';
+  }
+  function pulse(v){ const r = runner(); if (r) r.pulse(v); }
+  function drive(v){ const r = runner(); if (r && r.setDrive) r.setDrive(v); }
+  function heat(v){ const r = runner(); if (r && r.setHeat) r.setHeat(v); }
+
+  document.addEventListener('pointermove', e => {
+    const r = runner();
+    if (r) r.setMouse(e.clientX/innerWidth - 0.5, e.clientY/innerHeight - 0.5);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (/INPUT|TEXTAREA/.test(document.activeElement && document.activeElement.tagName)) return;
+    if (e.key === 'w' || e.key === 'W') cycle(1);
+    if (e.key === 's' || e.key === 'S') toggleMenu();
+    if (e.key === 'Escape') toggleMenu(false);
+    if (e.key === 'f' || e.key === 'F') FS.toggle();
+    if (e.key === 'l' || e.key === 'L') Layout.toggle();
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= 9){ const list = available(); if (list[n-1]) show(list[n-1]); }
+    if (e.key === '0'){ const list = available(); if (list[9]) show(list[9]); }
+  });
+  $('btn-theme').addEventListener('click', () => toggleMenu());
+  $('btn-theme').addEventListener('contextmenu', e => { e.preventDefault(); cycle(1); });
+  $('btn-logout').addEventListener('click', () => location.href = '/api/logout');
+  return { init, cycle, pulse, drive, heat, show, toggleMenu, refresh: renderMenu };
+})();
+
+/* ════════ DEVICE MODE + FULLSCREEN ════════ */
+const touchMq = window.matchMedia('(pointer:coarse)');
+function applyDeviceClass(){
+  document.body.classList.toggle('touch', touchMq.matches);
+}
+if (touchMq.addEventListener) touchMq.addEventListener('change', applyDeviceClass);
+applyDeviceClass();
+
+/* ════════ LAYOUT: fit (viewport grid, no scroll) vs flow (scrolling page) ════════
+   auto = fit whenever the viewport is desktop-sized; 'flow' is a sticky
+   user override for reading the long-form model cards. */
+const Layout = (() => {
+  const mq = window.matchMedia('(min-width:760px) and (min-height:540px)');
+  const btn = $('btn-layout');
+  let pref = 'auto';
+  try { pref = localStorage.getItem('nvtop-layout') || 'auto'; } catch(e){}
+  function apply(){
+    const fit = pref === 'flow' ? false : mq.matches;
+    const was = document.body.classList.contains('fit');
+    document.body.classList.toggle('fit', fit);
+    btn.classList.toggle('on', fit);
+    btn.title = fit ? 'fit layout · click for scrolling page (L)' : (mq.matches ? 'scrolling page · click to fit window (L)' : 'fit layout needs a larger window');
+    if (was !== fit) requestAnimationFrame(() => { if (lastSnap) render(lastSnap, true); });
+  }
+  function toggle(){
+    pref = document.body.classList.contains('fit') ? 'flow' : 'auto';
+    try { localStorage.setItem('nvtop-layout', pref); } catch(e){}
+    apply();
+  }
+  if (mq.addEventListener) mq.addEventListener('change', apply);
+  btn.addEventListener('click', toggle);
+  apply();
+  return { apply, toggle };
+})();
+
+const FS = (() => {
+  const root = document.documentElement;
+  const btn = $('btn-fs');
+  const req = root.requestFullscreen || root.webkitRequestFullscreen;
+  if (!req){ btn.style.display = 'none'; return { toggle(){} }; }
+  let lock = null;
+  const active = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  async function grabWakeLock(){
+    try { lock = navigator.wakeLock ? await navigator.wakeLock.request('screen') : null; } catch(e){ lock = null; }
+  }
+  function dropWakeLock(){ try { if (lock) lock.release(); } catch(e){} lock = null; }
+  function sync(){
+    const on = active();
+    btn.classList.toggle('on', on);
+    btn.title = on ? 'exit fullscreen (F)' : 'fullscreen (F)';
+    if (on) grabWakeLock(); else dropWakeLock();
+  }
+  function toggle(){
+    if (active()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else { const p = req.call(root); if (p && p.catch) p.catch(()=>{}); }
+  }
+  document.addEventListener('fullscreenchange', sync);
+  document.addEventListener('webkitfullscreenchange', sync);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && active()) grabWakeLock(); });
+  btn.addEventListener('click', toggle);
+  return { toggle };
+})();
+
+/* Boot the selected theme first; fetch the remaining shaders after load. */
+function loadTheme(id, done, priority){
+  if ((window.NVTHEMES||{})[id]){ done(); return; }
+  const s = document.createElement('script');
+  s.src = '/static/themes/' + id + '.js?v=' + ASSET_VER;
+  s.fetchPriority = priority || 'low';
+  s.onload = done; s.onerror = done;
+  document.head.appendChild(s);
+}
+(function loadThemes(){
+  let selected = DEFAULT_THEME;
+  try {
+    const saved = localStorage.getItem('nvtop-theme');
+    if (THEME_ORDER.includes(saved)) selected = saved;
+  } catch(e){}
+  loadTheme(selected, () => {
+    Engine.init();
+    const loadRest = () => {
+      let pending = THEME_ORDER.length - 1;
+      if (!pending){ Engine.refresh(); return; }
+      THEME_ORDER.forEach(id => {
+        if (id === selected) return;
+        loadTheme(id, () => { if (--pending === 0) Engine.refresh(); }, 'low');
+      });
+    };
+    const idleLoad = () => 'requestIdleCallback' in window
+      ? requestIdleCallback(loadRest, {timeout:1000}) : setTimeout(loadRest, 0);
+    if (document.readyState === 'complete') idleLoad();
+    else window.addEventListener('load', idleLoad, {once:true});
+  }, 'high');
+})();
+
+/* ────── sparkline / line chart helpers ────── */
+function drawLine(canvas, data, color, fillColor, opts={}){
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w || !h) return;
+  if (canvas.width !== w*dpr || canvas.height !== h*dpr){
+    canvas.width = w*dpr; canvas.height = h*dpr;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  if (!data || data.length < 2) return;
+  let min = opts.min ?? Math.min(...data);
+  let max = opts.max ?? Math.max(...data);
+  if (max - min < 1e-6){ max = min + 1; }
+  if (opts.zeroBase) min = 0;
+  const pad = 4;
+  const xs = (i) => pad + (w - pad*2) * (i/(data.length-1));
+  const ys = (v) => h - pad - (h - pad*2) * ((v - min)/(max - min));
+  ctx.strokeStyle = UI.light ? 'rgba(0,0,0,.06)' : 'rgba(255,255,255,.05)'; ctx.lineWidth=1;
+  for (let i=1;i<4;i++){ const y = h*i/4; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  if (fillColor){
+    ctx.beginPath();
+    ctx.moveTo(xs(0), h);
+    for (let i=0;i<data.length;i++) ctx.lineTo(xs(i), ys(data[i]));
+    ctx.lineTo(xs(data.length-1), h); ctx.closePath();
+    const g = ctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0, fillColor);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fill();
+  }
+  if (opts.peak != null && opts.peak > 0){
+    const py = ys(opts.peak);
+    if (py > 2 && py < h - 2){
+      ctx.save(); ctx.setLineDash([3,4]); ctx.strokeStyle = hexA(UI.accent2, .55); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(pad, py); ctx.lineTo(w - pad, py); ctx.stroke(); ctx.restore();
+    }
+  }
+  ctx.strokeStyle = color; ctx.lineWidth = opts.hero ? 2.4 : 1.8; ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.shadowColor = color; ctx.shadowBlur = UI.light ? 0 : (opts.hero ? 16 : 8);
+  ctx.beginPath();
+  for (let i=0;i<data.length;i++){
+    const x = xs(i), y = ys(data[i]);
+    if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  const lx = xs(data.length-1), ly = ys(data[data.length-1]);
+  if (opts.hero){
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 260);
+    ctx.fillStyle = hexA(color, .25 + .25 * pulse); ctx.beginPath(); ctx.arc(lx, ly, 6 + 4 * pulse, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(lx, ly, 2.4, 0, Math.PI*2); ctx.fill();
+    canvas.__head = [lx, ly];
+  } else {
+    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(lx,ly,2.6,0,Math.PI*2); ctx.fill();
+  }
+}
+const hexA = (hex, a) => {
+  const [r,g,b] = [0,2,4].map(i=>parseInt(hex.replace('#','').slice(i,i+2),16));
+  return `rgba(${r},${g},${b},${a})`;
+};
+
+/* ────── render ────── */
+let lastSnap = null;
+let historyVersion = 0, modelsVersion = 0;
+let renderedHistoryVersion = -1, renderedModelsVersion = -1;
+let dirtyGpuIndices = null;
+
+function setText(el, value){
+  const next = String(value);
+  if (el.textContent !== next) el.textContent = next;
+}
+function setStyle(el, property, value){
+  const next = String(value);
+  if (el.style[property] !== next) el.style[property] = next;
+}
+function setAttr(el, name, value){
+  const next = String(value);
+  if (el.getAttribute(name) !== next) el.setAttribute(name, next);
+}
+function setBar(el, pct, valueText){
+  const fill = el.querySelector('.fill');
+  const v = el.querySelector('.value');
+  setStyle(fill, 'width', Math.min(100, Math.max(0, pct)).toFixed(1) + '%');
+  if (v && valueText !== undefined) setText(v, valueText);
+}
+
+/* 'NVIDIA RTX PRO 6000 Blackwell Workstation Edition' → 'RTX PRO 6000 Blackwell WS'; full name stays in the tooltip */
+const shortGpuName = (n) => String(n||'').replace(/^NVIDIA\s+/i,'').replace(/\bWorkstation Edition\b/i,'WS').replace(/\bServer Edition\b/i,'SRV').replace(/\bGeForce\s+/i,'').replace(/\s+/g,' ').trim();
+function gpuCardTemplate(g){
+  let ticks = '';
+  for (let t = 20; t <= 100; t += 10){
+    const y = (168 - (t - 20) / 80 * 148).toFixed(1);
+    const maj = t % 20 === 0;
+    ticks += `<line class="tick${maj?' maj':''}" x1="40" x2="${maj?47:44.5}" y1="${y}" y2="${y}"/>`;
+    if (maj && t > 20) ticks += `<text class="tlab" x="48.5" y="${(+y+2.4).toFixed(1)}">${t}</text>`;
+  }
+  let sticks = '';
+  for (let p = 0; p <= 100; p += 5){
+    const a = (210 - p*2.4) * Math.PI/180;
+    const maj = p % 25 === 0;
+    const r1 = maj ? 59 : 64, r2 = 70;
+    sticks += `<line class="stick${maj?' maj':''}" x1="${(110 + r1*Math.cos(a)).toFixed(1)}" y1="${(92 - r1*Math.sin(a)).toFixed(1)}"`
+            + ` x2="${(110 + r2*Math.cos(a)).toFixed(1)}" y2="${(92 - r2*Math.sin(a)).toFixed(1)}"/>`;
+    if (maj) sticks += `<text class="slab" x="${(110 + 46*Math.cos(a)).toFixed(1)}" y="${(92 - 46*Math.sin(a) + 2.6).toFixed(1)}" text-anchor="middle">${p}</text>`;
+  }
+  return `
+  <div class="panel gpu-card" data-idx="${g.index}">
+    <div class="pcie-degraded-badge" data-role="pcie-badge"></div>
+    <div class="gc">
+    <div class="head">
+      <div class="gpu-id">
+        <div class="num">${g.index}</div>
+        <div class="meta">
+          <div class="name" title="${esc(g.name)}">${esc(shortGpuName(g.name))}</div>
+          <div class="sub" data-role="uuid">${g.uuid.slice(0,18)}…</div>
+        </div>
+      </div>
+      <div class="tags">
+        <div class="pcie-link" data-role="pcie">
+          <span class="cap">PCIe <strong>${g.pcie_gen_max}.0 &times;${g.pcie_width_max}</strong></span>
+          <span class="state" data-role="pcie-state">now: Gen${g.pcie_gen}</span>
+        </div>
+        <div class="pcie-aer" data-role="pcie-aer"></div>
+        <div class="chips"><div class="chip-row" data-role="chips-clk"></div><div class="chip-row" data-role="chips-tag"></div></div>
+      </div>
+    </div>
+    <div class="gauges">
+      <div class="speedo" data-role="speedo">
+        <svg viewBox="0 0 220 156">
+          <defs>
+            <linearGradient id="sg-${g.index}" x1="0" y1="1" x2="1" y2="0">
+              <stop offset="0" stop-color="var(--accent)"/>
+              <stop offset="1" stop-color="var(--accent2)"/>
+            </linearGradient>
+          </defs>
+          <path class="sp-track" d="M 42.5 131 A 78 78 0 1 1 177.5 131"/>
+          <path class="sp-danger" d="M 187.6 83.9 A 78 78 0 0 1 177.5 131"/>
+          <path class="sp-fill" data-role="sp-fill" d="M 42.5 131 A 78 78 0 1 1 177.5 131"
+            stroke="url(#sg-${g.index})" stroke-dasharray="326.8" stroke-dashoffset="326.8"/>
+          ${sticks}
+          <line class="sp-peak" data-role="sp-peak" x1="110" y1="11" x2="110" y2="19" style="transform:rotate(-120deg)"/>
+          <polygon class="sp-needle" data-role="sp-needle" points="110,28 106.8,92 110,101 113.2,92" style="transform:rotate(-120deg)"/>
+          <circle class="sp-hub" cx="110" cy="92" r="6"/>
+          <circle class="sp-tip" data-role="sp-tip" cx="42.5" cy="131" r="3"/>
+          <text class="sp-big" data-role="util-pct" x="110" y="130" text-anchor="middle">0%</text>
+          <text class="sp-lbl" x="110" y="145" text-anchor="middle">GPU UTIL</text>
+        </svg>
+      </div>
+      <div class="thermo cool" data-role="thermo">
+        <svg viewBox="0 0 62 206">
+          <defs>
+            <linearGradient id="tg-${g.index}" x1="0" y1="176" x2="0" y2="20" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="var(--good)"/>
+              <stop offset="0.52" stop-color="var(--good)"/>
+              <stop offset="0.63" stop-color="var(--warn)"/>
+              <stop offset="0.74" stop-color="var(--warn)"/>
+              <stop offset="0.87" stop-color="var(--crit)"/>
+              <stop offset="1" stop-color="var(--crit)"/>
+            </linearGradient>
+            <clipPath id="tc-${g.index}"><rect class="mercclip" data-role="merc-clip" x="26.5" y="168" width="9" height="10" rx="4.5"/></clipPath>
+          </defs>
+          <rect class="glass" x="24" y="14" width="14" height="162" rx="7"/>
+          <circle class="glass" cx="31" cy="188" r="15"/>
+          <circle class="bulb" data-role="bulb" cx="31" cy="188" r="10.5" fill="var(--good)"/>
+          <rect class="merc" data-role="merc" x="26.5" y="168" width="9" height="10" rx="4.5" fill="url(#tg-${g.index})"/>
+          <g clip-path="url(#tc-${g.index})">
+            <circle class="bub b1" cx="29" cy="170" r="1.3"/>
+            <circle class="bub b2" cx="32.5" cy="172" r="1"/>
+            <circle class="bub b3" cx="31" cy="171" r="0.8"/>
+          </g>
+          <ellipse class="meniscus" data-role="meniscus" cx="31" cy="168" rx="4" ry="1.5"/>
+          ${ticks}
+          <line class="tcrit" x1="24" x2="38" y1="51.5" y2="51.5"/>
+        </svg>
+        <div class="t-read"><span data-role="t-val">—</span><span class="u">°C</span><span class="trend" data-role="t-trend"></span></div>
+        <div class="t-lbl">core temp</div>
+      </div>
+    </div>
+    <div class="right">
+      <div class="meter mem" data-role="m-mem"><div class="mh"><span class="label">Memory</span><span class="pk" data-role="mem-pk">—</span><span class="value">0%</span></div><div class="track"><div class="fill"></div></div><canvas class="hist" data-role="spark-mem"></canvas></div>
+      <div class="meter power" data-role="m-power"><div class="mh"><span class="label">Power</span><span class="pk" data-role="pwr-pk">—</span><span class="value">0W</span></div><div class="track"><div class="fill"></div></div><canvas class="hist" data-role="spark-pwr"></canvas></div>
+      <div class="meter util" data-role="m-util"><div class="mh"><span class="label">Util</span><span class="pk" data-role="util-pk">—</span><span class="value">0%</span></div><div class="track"><div class="fill"></div></div><canvas class="hist" data-role="spark-util"></canvas></div>
+      <div class="meter temp" data-role="m-temp"><div class="mh"><span class="label">Temp</span><span class="pk" data-role="tmp-pk">—</span><span class="value">0°C</span></div><div class="track"><div class="fill"></div></div><canvas class="hist" data-role="spark-tmp"></canvas></div>
+    </div>
+    <div class="procs">
+      <table>
+        <thead><tr><th>PID</th><th>Process</th><th style="text-align:right">VRAM</th></tr></thead>
+        <tbody data-role="procs"></tbody>
+      </table>
+      <div class="procs-line" data-role="procs-line"></div>
+    </div>
+    </div>
+  </div>`;
+}
+
+const peakUtil = new Map();
+const visibleGpuCards = new WeakSet();
+const gpuObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
+  for (const entry of entries){
+    if (entry.isIntersecting){
+      visibleGpuCards.add(entry.target);
+      const gpu = lastSnap && lastSnap.gpus.find(g => String(g.index) === entry.target.dataset.idx);
+      if (gpu) drawGpuCharts(entry.target, gpu);
+    } else {
+      visibleGpuCards.delete(entry.target);
+    }
+  }
+}, {rootMargin:'160px 0px'}) : null;
+
+function drawGpuCharts(card, g){
+  const Q = (sel) => card.querySelector(sel);
+  const h = g.history || {};
+  const pk = (arr) => (arr && arr.length) ? Math.max(...arr) : null;
+  drawLine(Q('[data-role="spark-util"]'), h.util||[], UI.accent2, hexA(UI.accent2,.25), {min:0,max:100});
+  drawLine(Q('[data-role="spark-mem"]'), h.mem||[], UI.info, hexA(UI.info,.25), {min:0,max:100});
+  drawLine(Q('[data-role="spark-pwr"]'), h.power||[], UI.warn, hexA(UI.warn,.25), {min:0,max:100});
+  drawLine(Q('[data-role="spark-tmp"]'), h.temp||[], UI.crit, hexA(UI.crit,.22), {min:20,max:95});
+  const u = pk(h.util), m = pk(h.mem), p = pk(h.power), t = pk(h.temp);
+  setText(Q('[data-role="util-pk"]'), u == null ? '—' : 'pk ' + u.toFixed(0) + '%');
+  setText(Q('[data-role="mem-pk"]'), m == null ? '—' : 'pk ' + m.toFixed(0) + '%');
+  setText(Q('[data-role="pwr-pk"]'), p == null ? '—' : 'pk ' + p.toFixed(0) + '%');
+  setText(Q('[data-role="tmp-pk"]'), t == null ? '—' : 'pk ' + t.toFixed(0) + '°');
+}
+function updateGpuCard(card, g, drawCharts){
+  const Q = (sel) => card.querySelector(sel);
+  /* short uuid: the head row is prime real estate, full id lives in the tooltip */
+  const uu = Q('[data-role="uuid"]');
+  setText(uu, (g.uuid || '').slice(0, 17));
+  setAttr(uu, 'title', g.uuid || '');
+  const util = g.utilization_gpu_pct;
+  const clamped = Math.min(100, Math.max(0, util));
+  const sp = Q('[data-role="speedo"]');
+  const fill = Q('[data-role="sp-fill"]');
+  setStyle(fill, 'strokeDashoffset', 326.8 * (1 - clamped/100));
+  setStyle(fill, 'stroke', util > 95 ? 'var(--crit)' : util > 85 ? 'var(--warn)' : `url("#sg-${g.index}")`);
+  setStyle(Q('[data-role="sp-needle"]'), 'transform', `rotate(${clamped*2.4 - 120}deg)`);
+  const tipA = (210 - clamped*2.4) * Math.PI/180;
+  const tip = Q('[data-role="sp-tip"]');
+  setAttr(tip, 'cx', (110 + 78*Math.cos(tipA)).toFixed(1));
+  setAttr(tip, 'cy', (92 - 78*Math.sin(tipA)).toFixed(1));
+  const peak = Math.max(peakUtil.get(g.index) || 0, clamped);
+  peakUtil.set(g.index, peak);
+  setStyle(Q('[data-role="sp-peak"]'), 'transform', `rotate(${peak*2.4 - 120}deg)`);
+  sp.classList.toggle('critu', util > 95);
+  sp.classList.toggle('hotu', util > 85 && util <= 95);
+  setText(Q('[data-role="util-pct"]'), util.toFixed(0) + '%');
+
+  setBar(Q('[data-role="m-mem"]'), g.memory_pct, `${(g.memory_used_mib/1024).toFixed(1)} / ${(g.memory_total_mib/1024).toFixed(1)} GiB`);
+  setBar(Q('[data-role="m-power"]'), g.power_pct, `${g.power_draw_w.toFixed(0)}W / ${g.power_limit_w.toFixed(0)}W`);
+  setBar(Q('[data-role="m-util"]'), clamped, util.toFixed(0) + '%');
+  const tC = g.temperature_c;
+  setBar(Q('[data-role="m-temp"]'), (Math.min(100, Math.max(20, tC)) - 20) / 80 * 100, tC.toFixed(0) + '°C');
+  for (const [sel, hot, crit, v] of [['[data-role="m-mem"]', 90, 97, g.memory_pct], ['[data-role="m-power"]', 85, 97, g.power_pct],
+                                      ['[data-role="m-util"]', 101, 101, util], ['[data-role="m-temp"]', 70, 80, tC]]){
+    const m = Q(sel); m.classList.toggle('hot', v >= hot && v < crit); m.classList.toggle('crit', v >= crit);
+  }
+  const tps = g.tps?.total || 0;
+
+  /* ── thermometer ── */
+  const th = Q('[data-role="thermo"]');
+  if (th){
+    const t = g.temperature_c;
+    const yv = 168 - (Math.min(100, Math.max(20, t)) - 20) / 80 * 148;
+    for (const sel of ['[data-role="merc"]', '[data-role="merc-clip"]']){
+      const el = th.querySelector(sel);
+      setStyle(el, 'y', yv + 'px');
+      setStyle(el, 'height', (178 - yv) + 'px');
+    }
+    setStyle(th.querySelector('[data-role="meniscus"]'), 'cy', yv + 'px');
+    const cls = t >= 80 ? 'fire' : t >= 70 ? 'hot' : t >= 55 ? 'warm' : 'cool';
+    if (!th.classList.contains(cls)){
+      th.classList.remove('cool','warm','hot','fire');
+      th.classList.add(cls);
+    }
+    setStyle(
+      th.querySelector('[data-role="bulb"]'),
+      'fill',
+      t >= 80 ? 'var(--crit)' : t >= 70 ? 'var(--warn)' : 'var(--good)',
+    );
+    setText(th.querySelector('[data-role="t-val"]'), t.toFixed(0));
+    const hist = (g.history || {}).temp || [];
+    const prev = hist.length > 31 ? hist[hist.length - 31] : (hist[0] ?? t);
+    const d = t - prev;
+    const tr = th.querySelector('[data-role="t-trend"]');
+    setText(tr, d > 1.5 ? '▲' : d < -1.5 ? '▼' : '');
+    setStyle(tr, 'color', d > 1.5 ? 'var(--crit)' : 'var(--good)');
+  }
+
+  const pcie = Q('[data-role="pcie"]');
+  const pcieState = Q('[data-role="pcie-state"]');
+  if (pcie && pcieState) {
+    const genMax = g.pcie_gen_max || 0;
+    const widthMax = g.pcie_width_max || 0;
+    const gen = g.pcie_gen || 0;
+    const width = g.pcie_width || 0;
+
+    let stateText = `Gen${gen}`;
+    if (width > 0 && width < widthMax) stateText += ` ×${width}`;
+    const tx = g.pcie_tx_mbps || 0, rx = g.pcie_rx_mbps || 0, cap = g.pcie_cap_mbps || 0;
+    const fmtBw = (x) => x >= 1000 ? (x/1000).toFixed(1) + ' GB/s' : x.toFixed(0) + ' MB/s';
+    if (cap) stateText += ` · ↑${fmtBw(tx)} ↓${fmtBw(rx)}`;
+    setText(pcieState, stateText);
+    const busU = cap ? Math.min(100, Math.max(tx, rx) / cap * 100) : 0;
+    setStyle(pcie, '--u', busU.toFixed(1) + '%');
+    setAttr(pcie, 'title', cap ? `bus ${busU.toFixed(0)}% of ${fmtBw(cap)} per direction at the current link state` : '');
+
+    const degraded = (gen >= 2 && gen < genMax && util > 15) || (width > 0 && width < widthMax);
+    const amber = !degraded && gen > 0 && gen < genMax && util > 15;
+    pcie.classList.toggle('red', degraded);
+    pcie.classList.toggle('amber', amber);
+    card.classList.toggle('pcie-degraded', degraded);
+    const badge = Q('[data-role="pcie-badge"]');
+    if (badge && degraded) setText(badge, `PCIe DEGRADED · Gen${gen}`);
+  }
+  const aer = g.pcie_aer;
+  const aerEl = Q('[data-role="pcie-aer"]');
+  if (aerEl && aer) {
+    if (aer.total_correctable === 0 && aer.total_fatal === 0 && aer.total_nonfatal === 0) {
+      setHTML(aerEl, `<span class="aer-clean"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> AER Clean</span>`);
+    } else {
+      let html = '';
+      if (aer.total_fatal > 0 || aer.total_nonfatal > 0) {
+        html += `<span class="aer-err fatal">Fatal: ${fmtCompact(aer.total_fatal + aer.total_nonfatal)}</span>`;
+      }
+      if (aer.total_correctable > 0) {
+        const parts = [];
+        for (const [k, v] of Object.entries(aer.correctable || {})) {
+          if (v > 0 && k !== 'TOTAL_ERR_COR') {
+            parts.push(`<span class="aer-k">${k}</span> <span class="aer-v">${fmtCompact(v)}</span>`);
+          }
+        }
+        if (parts.length > 0) {
+          parts.push(`<span class="aer-k">Total</span> <span class="aer-v">${fmtCompact(aer.total_correctable)}</span>`);
+          html += `<div class="aer-list">${parts.join('<span class="aer-sep">·</span>')}</div>`;
+        } else {
+          html += `<div class="aer-list"><span class="aer-k">Errors</span> <span class="aer-v">${fmtCompact(aer.total_correctable)}</span></div>`;
+        }
+      }
+      setHTML(aerEl, html);
+    }
+  } else if (aerEl) {
+    setHTML(aerEl, '');
+  }
+  setHTML(Q('[data-role="chips-clk"]'),
+    `<span class="chip" title="SM clock · memory clock">SM ${g.graphics_clock_mhz.toFixed(0)} · MEM ${g.memory_clock_mhz.toFixed(0)} MHz</span>` +
+    (g.pstate ? `<span class="chip">${esc(g.pstate)}</span>` : '') +
+    `<span class="chip fan" title="fan speed">FAN <b>${g.fan_pct.toFixed(0)}%</b></span>` +
+    `<span class="chip tps" title="this GPU's share of cluster throughput">TPS <b>${fmt(tps,1)}</b></span>`);
+  const tagItems = [];
+  if (g.utilization_gpu_pct >= 95 && g.power_pct < 25)
+    tagItems.push(`<span class="chip spin" title="100% utilization at idle power — a resident kernel is busy-waiting (e.g. NCCL barrier), not doing real work">SPIN-WAIT</span>`);
+  if (g.tps?.models?.length) {
+    const seen = new Set();
+    for (const m of g.tps.models){
+      const tag = (m.names && m.names[0]) || m.label;
+      if (seen.has(tag)) continue;
+      seen.add(tag);
+      tagItems.push(`<span class="chip model" title="${esc(tag)}">${esc(tag)}</span>`);
+    }
+  }
+  setHTML(Q('[data-role="chips-tag"]'), tagItems.join(''));
+
+  if (drawCharts) drawGpuCharts(card, g);
+
+  const tbody = Q('[data-role="procs"]');
+  const procs = g.processes || [];
+  const pname = (p) => (p.process_name||'').replace(/^.*\//,'').slice(0,40);
+  setHTML(tbody, procs.slice(0,8).map(p =>
+    `<tr><td class="pid">${p.pid}</td><td>${esc(pname(p))}</td><td class="mem">${fmtBytesMib(p.used_memory_mib)}</td></tr>`
+  ).join('') || `<tr><td colspan="3" style="color:var(--faint);text-align:center;padding:10px">no compute apps</td></tr>`);
+  /* fit mode: same data as one chip line, heaviest first */
+  const pl = Q('[data-role="procs-line"]');
+  if (pl){
+    const sorted = procs.slice().sort((a,b) => (b.used_memory_mib||0) - (a.used_memory_mib||0));
+    const shown = sorted.slice(0,4);
+    setHTML(pl, `<span class="pl">procs</span>` + (shown.length
+      ? shown.map(p => `<span class="pchip" title="pid ${p.pid} · ${esc(p.process_name||'')}"><span class="pn">${esc(pname(p))}</span><b>${fmtBytesMib(p.used_memory_mib)}</b></span>`).join('')
+        + (sorted.length > shown.length ? `<span class="pchip more">+${sorted.length - shown.length}</span>` : '')
+      : `<span class="pchip none">no compute apps</span>`));
+  }
+}
+
+function renderGpus(snap, drawCharts, dirty){
+  const root = $('gpus');
+  const existing = new Map([...root.children].map(c => [c.dataset.idx, c]));
+  const seen = new Set();
+  for (const g of snap.gpus){
+    seen.add(String(g.index));
+    let card = existing.get(String(g.index));
+    const isNew = !card;
+    if (isNew){
+      root.insertAdjacentHTML('beforeend', gpuCardTemplate(g));
+      card = root.lastElementChild;
+      if (gpuObserver) gpuObserver.observe(card);
+    }
+    const liveChanged = isNew || dirty === null || dirty.has(g.index);
+    const chartsVisible = isNew || (drawCharts && (!gpuObserver || visibleGpuCards.has(card)));
+    if (liveChanged) updateGpuCard(card, g, chartsVisible);
+    else if (chartsVisible) drawGpuCharts(card, g);
+  }
+  for (const [k,c] of existing){
+    if (!seen.has(k)){
+      if (gpuObserver) gpuObserver.unobserve(c);
+      c.remove();
+    }
+  }
+  root.classList.add('ready');
+}
+
+function modelCardTemplate(m){
+  return `
+  <div class="panel model-card ${m.healthy?'healthy':''}" data-id="${m.id}">
+    <div class="accent-bar"></div>
+    <div class="head">
+      <div class="ident">
+        <div class="crest" data-role="crest">◈</div>
+        <div class="ident-tx">
+          <div class="name" data-role="name">${m.label}</div>
+          <div class="lineage" data-role="lineage">—</div>
+        </div>
+      </div>
+      <div class="head-right">
+        <div class="status"><span class="blip"></span><span data-role="state">${m.healthy?'live':'offline'}</span></div>
+        <div class="engine-badge" data-role="engine" hidden></div>
+      </div>
+    </div>
+    <div class="blurb" data-role="blurb" hidden></div>
+    <div class="meta">
+    <div class="role" data-role="role">${m.endpoint} · GPUs ${m.gpu_indices.join(',')||'—'}</div>
+    <div class="served" data-role="served"></div>
+    <div class="specs" data-role="specs" hidden></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="v" data-role="total">0</div><div class="l">total</div></div>
+      <div class="stat"><div class="v" data-role="out">0</div><div class="l">out</div></div>
+      <div class="stat"><div class="v" data-role="in">0</div><div class="l">in</div></div>
+      <div class="stat"><div class="v" data-role="run">0</div><div class="l">run</div></div>
+      <div class="stat"><div class="v" data-role="wait">0</div><div class="l">queue</div></div>
+      <div class="stat"><div class="v" data-role="kv">0%</div><div class="l">kv</div></div>
+    </div>
+    <canvas class="spark" data-role="spark"></canvas>
+  </div>`;
+}
+
+const modelSparks = new Map();
+function updateModelCard(card, m){
+  const Q = (s) => card.querySelector(s);
+  const it = m.intel || {};
+  card.classList.toggle('healthy', !!m.healthy);
+  Q('[data-role="state"]').textContent = m.healthy ? 'live' : 'offline';
+
+  /* identity */
+  Q('[data-role="name"]').textContent = it.display_name || m.label;
+  Q('[data-role="crest"]').textContent = (it.family || it.display_name || m.label || '◈')[0].toUpperCase();
+  const lineage = [
+    it.family ? `<b>${esc(it.family)}</b>` : '',
+    esc(it.creator || ''),
+    esc(it.origin || ''),
+    it.license ? esc(it.license.toUpperCase()) : '',
+  ].filter(Boolean).join(' <i>·</i> ');
+  setHTML(Q('[data-role="lineage"]'), lineage || esc(m.label));
+  const eng = Q('[data-role="engine"]');
+  eng.hidden = !it.engine;
+  if (it.engine) eng.textContent = it.engine + (it.engine_version ? ' ' + it.engine_version : '');
+  const blurb = Q('[data-role="blurb"]');
+  blurb.hidden = !(it.blurb || it.summary);
+  if (!blurb.hidden){
+    setHTML(blurb, (it.blurb ? esc(it.blurb) : '') +
+      (it.summary ? `<span class="src" title="${esc(it.summary)}">${esc(it.summary)}</span>` : ''));
+  }
+
+  /* live stats */
+  Q('[data-role="total"]').textContent = fmt(m.total_tps,1);
+  Q('[data-role="out"]').textContent = fmt(m.output_tps,1);
+  Q('[data-role="in"]').textContent = fmt(m.input_tps,1);
+  Q('[data-role="run"]').textContent = m.running;
+  Q('[data-role="wait"]').textContent = m.waiting;
+  Q('[data-role="kv"]').textContent = m.kv_cache_pct.toFixed(0)+'%';
+  Q('[data-role="role"]').textContent = `${m.endpoint} · GPUs ${m.gpu_indices.join(',')||'—'}`;
+  const served = Q('[data-role="served"]');
+  setHTML(served, (m.model_names && m.model_names.length)
+    ? m.model_names.map(n => `<span class="tag">${esc(n)}</span>`).join('')
+    : `<span class="tag" style="color:var(--faint)">${m.error ? esc(m.error.slice(0,80)) : 'no models'}</span>`);
+
+  /* spec sheet */
+  const cells = [];
+  const C = (v, l, live) => { if (v) cells.push(`<div class="spec${live?' live':''}"><div class="v">${v}</div><div class="l">${l}</div></div>`); };
+  /* serving quality first: these are what "how well is it running" means */
+  const msf = (x) => x == null ? null : x >= 1000 ? (x/1000).toFixed(2) + 's' : x.toFixed(0) + 'ms';
+  if (m.ttft_p50_ms != null) C(`${msf(m.ttft_p50_ms)} <span style="color:var(--muted);font-weight:500">/ ${msf(m.ttft_p95_ms)}</span>`, 'ttft p50 / p95', true);
+  else if (m.ttft_ms != null) C(msf(m.ttft_ms), 'ttft', true);
+  if (m.itl_p50_ms != null) C(`${msf(m.itl_p50_ms)} <span style="color:var(--muted);font-weight:500">/ ${msf(m.itl_p95_ms)}</span>`, 'inter-token p50 / p95', true);
+  else if (m.inter_token_ms != null) C(msf(m.inter_token_ms), 'inter-token', true);
+  if (m.prefix_hit_pct != null) C(m.prefix_hit_pct.toFixed(0) + '%', 'prefix cache hit', true);
+  if (m.preemptions_delta) C(String(Math.round(m.preemptions_delta)), 'preemptions', true);
+  if (m.boot_last && m.boot_last.total_s) C(`${Math.round(m.boot_last.total_s/60)}m${String(Math.round(m.boot_last.total_s%60)).padStart(2,'0')}`, 'last boot', true);
+  C(it.params && `<b>${esc(it.params)}</b>`, 'params');
+  if (it.moe) C(`${it.moe.experts}E·${it.moe.active ?? '?'}${it.moe.shared ? `+${it.moe.shared}` : ''}`, 'experts');
+  if (it.ctx_serving) C(fmtCtx(it.ctx_serving) + (it.ctx_native && it.ctx_native !== it.ctx_serving
+    ? ` <span style="color:var(--muted);font-weight:500">/ ${fmtCtx(it.ctx_native)}</span>` : ''), 'context');
+  C(it.quant && esc(it.quant), it.dtype ? esc(it.dtype).replace('float','f') + ' base' : 'quant');
+  if (it.layers && it.hidden) C(`${it.layers}L·${it.hidden}`, `${it.heads || '?'}H${it.attn ? ' · ' + esc(it.attn) : ''}`);
+  if (it.weights_gb) C(`${it.weights_gb >= 100 ? Math.round(it.weights_gb) : it.weights_gb} GB`, 'on disk');
+  if (it.vram_mib) C(fmtBytesMib(it.vram_mib), `vram${it.tp ? ' · tp' + it.tp : ''}`, true);
+  else if (it.tp) C(`TP${it.tp}`, 'parallelism');
+  if (it.uptime_s != null) C(fmtSecs(it.uptime_s), 'uptime', true);
+  const tok = (m.prompt_tokens_total || 0) + (m.generation_tokens_total || 0);
+  if (tok) C(fmtCompact(tok), 'tokens', true);
+  const specs = Q('[data-role="specs"]');
+  specs.hidden = !cells.length;
+  setHTML(specs, cells.join(''));
+
+  let hist = modelSparks.get(m.id);
+  if (!hist){ hist = []; modelSparks.set(m.id, hist); }
+  hist.push(m.total_tps);
+  if (hist.length > 180) hist.shift();
+  drawLine(Q('[data-role="spark"]'), hist, UI.accent, hexA(UI.accent,.33), {zeroBase:true});
+}
+
+/* ── sniffed models: anything holding weights on a GPU, endpoint or not ── */
+function sniffedCardTemplate(s){
+  return `
+  <div class="panel model-card sniffed" data-id="${s.id}">
+    <div class="accent-bar"></div>
+    <div class="head">
+      <div class="ident">
+        <div class="crest" data-role="crest">◆</div>
+        <div class="ident-tx">
+          <div class="name" data-role="name">${esc(s.name)}</div>
+          <div class="lineage" data-role="lineage">—</div>
+        </div>
+      </div>
+      <div class="head-right">
+        <div class="status"><span class="blip"></span><span data-role="state">in memory</span></div>
+        <div class="engine-badge" data-role="engine"></div>
+      </div>
+    </div>
+    <div class="loadprog" data-role="loadprog" hidden>
+      <div class="lp-top">
+        <div class="lp-clock"><span class="tp" data-role="lp-elapsed">T+00:00</span><span class="eta" data-role="lp-eta"></span></div>
+        <div class="lp-plan" data-role="lp-plan"></div>
+      </div>
+      <div class="stages" data-role="stages"></div>
+      <div class="bar-row">
+        <div class="track"><div class="fill" data-role="load-fill"></div></div>
+        <div class="pct" data-role="load-pct">…</div>
+      </div>
+      <div class="detail" data-role="load-detail"></div>
+      <div class="lp-ranks" data-role="lp-ranks"></div>
+      <div class="lp-warm" data-role="lp-warm"></div>
+      <div class="specs" data-role="load-cells"></div>
+      <div class="lp-log" data-role="lp-log"></div>
+    </div>
+    <div class="blurb" data-role="blurb" hidden></div>
+    <div class="meta">
+    <div class="role" data-role="role"></div>
+    <div class="served" data-role="served" hidden></div>
+    <div class="specs" data-role="specs" hidden></div>
+    </div>
+  </div>`;
+}
+
+function updateSniffedCard(card, s){
+  const Q = (sel) => card.querySelector(sel);
+  const it = s.intel || {};
+  Q('[data-role="name"]').textContent = s.name;
+  card.classList.toggle('loading', s.state === 'loading');
+  const _B = s.loading && s.loading.boot;
+  Q('[data-role="state"]').textContent = s.state === 'loading' ? (_B && _B.failed ? 'boot failed' : _B && _B.ready ? 'online' : 'loading') : 'in memory';
+
+  /* realtime load progress — launch sequence */
+  const lp = Q('[data-role="loadprog"]');
+  const L = s.loading;
+  lp.hidden = !L;
+  if (L){
+    const B = L.boot || null;
+    const stages = L.stages || ['init','weights','warmup','api'];
+    const failed = !!(B && B.failed);
+    const ready = !!(B && B.ready);
+    const stageIdx = B ? (B.stage === 'ready' ? stages.length : stages.indexOf(B.stage)) : L.stage_idx;
+    card.classList.toggle('boot-failed', failed);
+    card.classList.toggle('boot-ready', ready);
+    const mmss = (sec) => { if (sec == null) return '—'; sec = Math.max(0, Math.round(sec)); const m = Math.floor(sec/60), ss = sec%60; return m >= 60 ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}m` : `${m}:${String(ss).padStart(2,'0')}`; };
+    /* clock + eta */
+    const el = B ? B.elapsed_s : s.uptime_s;
+    setText(Q('[data-role="lp-elapsed"]'), 'T+' + mmss(el));
+    const etaEl = Q('[data-role="lp-eta"]');
+    if (failed) setText(etaEl, 'ABORTED');
+    else if (ready) setText(etaEl, 'ONLINE');
+    else if (B && B.eta_total_s != null) setText(etaEl, `eta ${mmss(B.eta_total_s)} · last boot ${mmss(B.last_boot?.total_s)}`);
+    else if (L.eta_s != null) setText(etaEl, `eta ${mmss(L.eta_s)}`);
+    else setText(etaEl, B && B.last_boot ? `last boot ${mmss(B.last_boot.total_s)}` : 'first boot · no history');
+    /* flight plan */
+    const plan = [];
+    if (B){
+      if (B.engine) plan.push(`<b>${esc(B.engine)}</b> ${esc(B.version || '')}`);
+      if (B.arch) plan.push(esc(B.arch.replace(/ForCausalLM$/, '')));
+      if (B.world) plan.push(`TP${B.world}`);
+      if (B.max_model_len) plan.push(`${fmtCtx(B.max_model_len)} ctx`);
+      if (B.kv_dtype) plan.push(`kv ${esc(B.kv_dtype)}`);
+      if (B.quant) plan.push(`experts ${esc(B.quant)}`);
+      if (B.ckpt_gib) plan.push(`${Math.round(B.ckpt_gib)} GiB ckpt`);
+      if (B.moe_backend) plan.push(esc(B.moe_backend.toLowerCase().replace(/_/g,' ')));
+      if (B.nccl) plan.push(`nccl ${esc(B.nccl)}`);
+      if (B.src) plan.push(`<i>${esc(B.src)}</i>`);
+    } else plan.push('<i>reading engine log…</i>');
+    setHTML(Q('[data-role="lp-plan"]'), plan.map(x => `<span>${x}</span>`).join(''));
+    /* stage track with live / historical durations */
+    const durs = (B && B.durations) || {};
+    const last = (B && B.last_boot && B.last_boot.stages) || {};
+    setHTML(Q('[data-role="stages"]'), stages.map((st, i) => {
+      const cls = failed && i === stageIdx ? 'fail' : i < stageIdx || ready ? 'done' : i === stageIdx ? 'on' : '';
+      const d = durs[st], ld = last[st];
+      const pctOf = ld && d != null && i === stageIdx && !ready ? Math.min(100, d / ld * 100) : null;
+      return `<div class="stage ${cls}" ${pctOf != null ? `style="--p:${pctOf.toFixed(0)}%"` : ''}>
+        <div class="sn">${esc(st)}</div>
+        <div class="sd">${d != null ? mmss(d) : '—'}${ld != null ? `<i>last ${mmss(ld)}</i>` : ''}</div></div>`;
+    }).join(''));
+    /* main bar */
+    const fill = Q('[data-role="load-fill"]');
+    let pct = null, detail = L.detail || '';
+    if (B){
+      if (failed){ pct = -1; detail = B.last_error ? `✖ ${B.last_error}` : '✖ engine exited during boot'; }
+      else if (ready){ pct = 100; detail = `ready · first token ${B.ttft_ms} ms · boot ${mmss(B.elapsed_s)}`; }
+      else if (B.stage === 'api'){ pct = 100; detail = B.ttft_err ? `api up · probe: ${B.ttft_err}` : 'api listening · probing first token…'; }
+      else if (B.stage === 'warmup'){
+        const gs = Object.entries(B.graphs || {});
+        /* whichever bar the engine is drawing right now drives ours: graphs, JIT warmup, parallel compile… */
+        const live = Object.entries(B.progress || {}).filter(([,g]) => g.done < g.total && (B.last_ts - g.ts) < 20).sort((a,b) => b[1].ts - a[1].ts)[0];
+        const allGraphsDone = gs.length && gs.every(([,g]) => g.done >= g.total);
+        if (live){ pct = live[1].pct; detail = `${live[0].toLowerCase()} ${live[1].done}/${live[1].total}`; }
+        else if (gs.length && !allGraphsDone){ const done = gs.reduce((a,[,g]) => a + g.done, 0), tot = gs.reduce((a,[,g]) => a + g.total, 0); pct = tot ? done/tot*100 : null;
+          detail = gs.map(([m,g]) => `${m.toLowerCase()} graphs ${g.done}/${g.total}${g.eta_s ? ` · eta ${mmss(g.eta_s)}` : ''}`).join(' · '); }
+        else { pct = null; detail = B.substage || 'warming up'; }
+      }
+      else if (B.stage === 'weights' && B.shards){
+        const sh = B.shards; pct = sh.pct;
+        detail = `${sh.done}/${sh.total} shards · ${sh.rate.toFixed(2)} ${sh.unit}` + (sh.eta_s != null ? ` · eta ${mmss(sh.eta_s)}` : '')
+               + (s.vram_mib && s.disk_gb ? ` · ${(s.vram_mib/953.7).toFixed(0)} / ${s.disk_gb.toFixed(0)} GB in VRAM` : '');
+      }
+      else if (B.stage === 'weights' && L.pct != null){ pct = L.pct; }
+      else detail = B.substage || detail;
+    } else if (L.pct != null) pct = L.pct;
+    fill.classList.toggle('indet', pct == null && !failed);
+    if (pct !== -1) fill.style.width = pct == null ? '' : pct + '%';   /* -1 = failed: freeze the bar where it died */
+    Q('[data-role="load-pct"]').textContent = pct === -1 ? '✖' : pct != null ? pct.toFixed(0) + '%' : '…';
+    Q('[data-role="load-detail"]').textContent = detail;
+    /* per-rank vram fill */
+    const ranks = (lastSnap?.gpus || []).filter(g => (s.gpu_indices || []).includes(g.index));
+    const perRank = B && B.load_gib ? B.load_gib : (s.disk_gb && B && B.world ? s.disk_gb * 0.9313 / B.world : null);
+    setHTML(Q('[data-role="lp-ranks"]'), ranks.length ? ranks.map(g => {
+      const used = g.memory_used_mib / 1024, p = perRank ? Math.min(100, used / perRank * 100) : g.memory_pct;
+      return `<div class="rk"><span class="rn">R${g.index}</span><span class="rt"><span class="rf" style="width:${p.toFixed(1)}%"></span></span><span class="rv">${used.toFixed(1)}<i>${perRank ? ' / ' + perRank.toFixed(0) : ''} GiB</i></span></div>`;
+    }).join('') : '');
+    /* warmup checklist */
+    const W = [];
+    if (B){
+      const ck = (ok, on, label) => W.push(`<span class="wk ${ok ? 'ok' : on ? 'on' : ''}"><em>${ok ? '✓' : on ? '◌' : '·'}</em>${label}</span>`);
+      ck(B.init_s != null, B.stage === 'init', B.init_s != null ? `model init ${B.init_s.toFixed(0)}s` : 'model init');
+      ck(B.load_total_s != null, B.stage === 'weights', B.load_total_s != null ? `weights ${mmss(B.load_total_s)} · ${B.load_gib} GiB/rank` : 'weights → vram');
+      ck(B.kv_gib != null, B.stage === 'warmup' && B.kv_gib == null, B.kv_gib != null ? `kv budget ${B.kv_gib} GiB/rank` : 'memory profiling');
+      ck(B.kv_tokens != null, false, B.kv_tokens != null ? `kv cache ${B.kv_tokens.toLocaleString('en-US')} tok${B.max_conc ? ` · ${B.max_conc}× @ ${fmtCtx(B.max_conc_len)}` : ''}` : 'kv cache');
+      if (B.dynamo_s != null || B.compile_s != null) ck(true, false, `compile ${((B.compile_s ?? B.dynamo_s)).toFixed(1)}s`);
+      const gs = Object.entries(B.graphs || {});
+      ck(B.graph_s != null || (gs.length && gs.every(([,g]) => g.done >= g.total)), B.stage === 'warmup' && gs.length > 0,
+         B.graph_s != null ? `cuda graphs ${B.graph_s}s · ${B.graph_gib} GiB` : gs.length ? `cuda graphs ${gs.map(([m,g]) => `${m[0]}${g.done}/${g.total}`).join(' ')}` : 'cuda graphs');
+      ck(B.api_up, B.stage === 'api' && !B.api_up, 'api server');
+      ck(B.ttft_ms != null, B.api_up && B.ttft_ms == null && !B.ttft_err, B.ttft_ms != null ? `first token ${B.ttft_ms} ms` : 'ttft probe');
+      if (B.warnings) W.push(`<span class="wk warn"><em>!</em>${B.warnings} warnings</span>`);
+      if (B.errors) W.push(`<span class="wk err"><em>✖</em>${B.errors} error lines</span>`);
+    }
+    setHTML(Q('[data-role="lp-warm"]'), W.join(''));
+    /* host-side telemetry cells */
+    const lc = [];
+    const LC = (v, l) => { if (v) lc.push(`<div class="spec live"><div class="v">${v}</div><div class="l">${l}</div></div>`); };
+    if (L.disk_read_mbps != null && L.disk_read_mbps > 1)
+      LC(L.disk_read_mbps >= 1000 ? (L.disk_read_mbps/1000).toFixed(2) + ' GB/s' : L.disk_read_mbps.toFixed(0) + ' MB/s', 'disk read');
+    if (L.vram_rate_mibps > 10) LC((L.vram_rate_mibps/953.7).toFixed(2) + ' GB/s', 'vram fill');
+    if (L.cpu_pct != null) LC(L.cpu_pct.toFixed(0) + '%', 'loader cpu');
+    if (L.rss_mib > 256) LC(fmtBytesMib(L.rss_mib), 'ram staged');
+    if (B && B.ram_avail_gib != null) LC(B.ram_avail_gib.toFixed(0) + ' GiB', 'ram free');
+    if (B && B.last_boot && B.last_boot.ttft_ms) LC(B.last_boot.ttft_ms + ' ms', 'last ttft');
+    setHTML(Q('[data-role="load-cells"]'), lc.join(''));
+    /* engine log tail */
+    const tail = (B && B.tail) || [];
+    setHTML(Q('[data-role="lp-log"]'), tail.slice(-6).map(x =>
+      `<div class="ln ${esc(x.lv)}"><span class="lt">${esc(x.t)}</span><span class="lv">${esc(x.lv.slice(0,4))}</span><span class="lg">${esc(x.tag)}</span><span class="lm" title="${esc(x.msg)}">${esc(x.msg)}</span></div>`).join(''));
+  }
+  Q('[data-role="crest"]').textContent = (it.family || s.name || '◆')[0].toUpperCase();
+  const lineage = [
+    it.family ? `<b>${esc(it.family)}</b>` : '',
+    esc(it.creator || ''),
+    esc(it.origin || ''),
+    it.license ? esc(it.license.toUpperCase()) : '',
+  ].filter(Boolean).join(' <i>·</i> ');
+  setHTML(Q('[data-role="lineage"]'), lineage || (s.app ? esc(s.app) : 'unidentified weights'));
+  Q('[data-role="engine"]').textContent = (s.app ? s.app + ' · ' : '') + 'sniffed';
+  Q('[data-role="role"]').textContent =
+    `pid ${(s.pids || []).join(',') || '—'} · GPUs ${(s.gpu_indices || []).join(',') || '—'}`
+    + ((s.ports || []).length ? ` · :${s.ports.join(' :')}` : '');
+  const blurb = Q('[data-role="blurb"]');
+  blurb.hidden = !(it.blurb || it.summary);
+  if (!blurb.hidden){
+    setHTML(blurb, (it.blurb ? esc(it.blurb) : '') +
+      (it.summary ? `<span class="src" title="${esc(it.summary)}">${esc(it.summary)}</span>` : ''));
+  }
+  const served = Q('[data-role="served"]');
+  served.hidden = !(s.served_names && s.served_names.length);
+  if (!served.hidden) setHTML(served, s.served_names.map(n => `<span class="tag">${esc(n)}</span>`).join(''));
+  const cells = [];
+  const C = (v, l, live) => { if (v) cells.push(`<div class="spec${live?' live':''}"><div class="v">${v}</div><div class="l">${l}</div></div>`); };
+  C(it.params && `<b>${esc(it.params)}</b>`, 'params');
+  if (it.moe) C(`${it.moe.experts}E·${it.moe.active ?? '?'}${it.moe.shared ? `+${it.moe.shared}` : ''}`, 'experts');
+  if (it.ctx_native) C(fmtCtx(it.ctx_native), 'context');
+  C(it.quant && esc(it.quant), it.dtype ? esc(it.dtype).replace('float','f') + ' base' : 'quant');
+  if (it.layers && it.hidden) C(`${it.layers}L·${it.hidden}`, `${it.heads || '?'}H${it.attn ? ' · ' + esc(it.attn) : ''}`);
+  if (s.vram_mib) C(fmtBytesMib(s.vram_mib), 'vram (proc)', true);
+  if (s.disk_gb) C(`${s.disk_gb >= 100 ? Math.round(s.disk_gb) : s.disk_gb} GB`, 'on disk');
+  if (s.n_files) C(String(s.n_files), 'weight files');
+  if (s.uptime_s != null) C(fmtSecs(s.uptime_s), 'held for', true);
+  if (s.boot_last && s.boot_last.outcome === 'ok' && s.boot_last.total_s)
+    C(`${Math.round(s.boot_last.total_s/60)}m${String(Math.round(s.boot_last.total_s%60)).padStart(2,'0')}` + (s.boot_last.ttft_ms ? ` <span style="color:var(--muted);font-weight:500">· ${s.boot_last.ttft_ms}ms</span>` : ''), `boot · ttft${s.boot_last.n > 1 ? ' · ' + s.boot_last.n + ' boots' : ''}`);
+  const specs = Q('[data-role="specs"]');
+  specs.hidden = !cells.length;
+  setHTML(specs, cells.join(''));
+}
+
+function renderModels(snap){
+  const root = $('models');
+  const existing = new Map([...root.children].map(c => [c.dataset.id, c]));
+  const seen = new Set();
+  for (const m of snap.models){
+    if (!m.healthy && !modelSparks.has(m.id)) continue; // hide endpoints that never came up
+    seen.add(m.id);
+    let card = existing.get(m.id);
+    if (!card){
+      root.insertAdjacentHTML('beforeend', modelCardTemplate(m));
+      card = root.lastElementChild;
+    }
+    updateModelCard(card, m);
+  }
+  for (const s of (snap.sniffed || [])){
+    seen.add(s.id);
+    let card = existing.get(s.id);
+    if (!card){
+      root.insertAdjacentHTML('beforeend', sniffedCardTemplate(s));
+      card = root.lastElementChild;
+    }
+    updateSniffedCard(card, s);
+  }
+  for (const [k,c] of existing) if (!seen.has(k)) c.remove();
+  root.classList.add('ready');
+}
+
+const _kpiPrev = {};
+function setKpi(id, html, key, val){
+  const el = $(id);
+  setHTML(el, html);
+  // bump animation on meaningful change
+  const prev = _kpiPrev[key];
+  if (prev !== undefined && Math.abs(val - prev) > Math.max(1, prev * 0.15)){
+    const kpi = el.closest('.kpi');
+    kpi.classList.remove('bump'); void kpi.offsetWidth; kpi.classList.add('bump');
+  }
+  _kpiPrev[key] = val;
+}
+
+function renderHeader(snap){
+  const u = fmtSecs(snap.uptime_seconds);
+  const tt = snap.totals || {};
+  const gbs = (x) => (x/1000).toFixed(x >= 10000 ? 0 : 1);
+  const segs = [snap.host, `driver ${snap.driver||'—'}`, `cuda ${snap.cuda||'—'}`, `uptime ${u}`,
+    (tt.pcie_tx_mbps != null ? `bus ↑${gbs(tt.pcie_tx_mbps)} ↓${gbs(tt.pcie_rx_mbps)} GB/s` : null),
+    (tt.tok_per_kj != null && tt.total_tps > 1 ? `${fmt(tt.tok_per_kj,0)} tok/kJ` : null),
+    `${snap.generated_at.slice(11,19)}Z`].filter(Boolean);
+  setHTML($('hostline'), segs.map((s, i) => `<span>${i ? '· ' : ''}${esc(s)}</span>`).join(''));
+  /* brand follows the machine it runs on: nothing site-specific is hard-coded */
+  const hostEl = $('brand-host');
+  if (hostEl && snap.host && hostEl.textContent !== snap.host){ hostEl.textContent = snap.host; document.title = `nvtop — ${snap.host}`; const fh = $('ft-host'); if (fh) fh.textContent = `${snap.host} · nvtop-web`; }
+  const t = snap.totals;
+  setKpi('kpi-tps', `${fmt(t.total_tps,1)}<span class="unit">tok/s</span>`, 'tps', t.total_tps);
+  setKpi('kpi-out', `${fmt(t.output_tps,1)}<span class="unit">tok/s</span>`, 'out', t.output_tps);
+  setKpi('kpi-in', `${fmt(t.input_tps,1)}<span class="unit">tok/s</span>`, 'in', t.input_tps);
+  setKpi('kpi-util', `${t.gpu_util_avg.toFixed(0)}<span class="unit">%</span>`, 'util', t.gpu_util_avg);
+  setKpi('kpi-pwr', `${t.power_draw_w.toFixed(0)}<span class="unit">W</span>`, 'pwr', t.power_draw_w);
+  const kwh = t.energy_today_kwh || 0;
+  setKpi('kpi-kwh', `${kwh >= 100 ? kwh.toFixed(0) : kwh.toFixed(kwh >= 10 ? 1 : 2)}<span class="unit">kWh</span>`, 'kwh', kwh);
+}
+
+/* ════════ HERO: total throughput — tweened odometer, load glow, token stream ════════ */
+const Hero = (() => {
+  const card = $('tps-hero'), now = $('ch-tps-now'), sub = $('tps-sub'), fx = $('tps-fx');
+  let target = 0, shown = 0, peak = 0, record = 0, outT = 0, inT = 0, lastText = '', raf = 0, lastT = performance.now();
+  try { record = parseFloat(localStorage.getItem('nvtop-tps-record')) || 0; } catch(e){}
+  const parts = [];           // token particles: {x,y,vx,vy,life,len}
+  let spawnAcc = 0;
+  function set(t){
+    target = t.total_tps || 0; outT = t.output_tps || 0; inT = t.input_tps || 0;
+    const hist = (t.history && t.history.total_tps) || [];
+    const sane = hist.filter(v => v < 50000);
+    peak = Math.max(peak, target < 50000 ? target : 0, ...sane);
+    if (target > record){ record = target; try { localStorage.setItem('nvtop-tps-record', String(Math.round(record*10)/10)); } catch(e){} }
+    setHTML(sub, `<span title="output tok/s">↑<b>${fmt(outT,0)}</b></span><span title="input tok/s">↓<b>${fmt(inT,0)}</b></span><span title="session peak">pk <b>${fmt(peak,0)}</b></span><span title="all-time record (this browser)">rec <b>${fmt(record,0)}</b></span>`);
+    if (!raf) raf = requestAnimationFrame(frame);
+  }
+  function frame(ts){
+    raf = 0;
+    const dt = Math.min(0.1, (ts - lastT) / 1000); lastT = ts;
+    /* odometer tween: fast attack, slow decay — a surge hits instantly, cool-down drifts */
+    const k = target > shown ? 1 - Math.exp(-dt * 9) : 1 - Math.exp(-dt * 3.5);
+    shown += (target - shown) * k;
+    if (Math.abs(target - shown) < 0.05) shown = target;
+    const txt = `${fmt(shown,1)}<span class="unit">tok/s</span>`;
+    if (txt !== lastText){ now.innerHTML = txt; lastText = txt; }
+    /* load factor vs session peak (never below 15% so there is always some ember) */
+    const f = peak > 1 ? Math.min(1, shown / peak) : 0;
+    const fs = f.toFixed(3);
+    if (card.style.getPropertyValue('--f') !== fs){ card.style.setProperty('--f', fs); const k1 = document.querySelector('.kpi.c-accent'); if (k1) k1.style.setProperty('--f', fs); }
+    /* token stream */
+    const dpr = window.devicePixelRatio || 1, w = fx.clientWidth, h = fx.clientHeight;
+    if (w && h){
+      if (fx.width !== w*dpr || fx.height !== h*dpr){ fx.width = w*dpr; fx.height = h*dpr; }
+      const c = fx.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,w,h);
+      const rate = shown < 0.5 ? 0.6 : 3 + Math.min(140, shown / 6);          /* particles per second */
+      const speed = 40 + Math.min(420, shown * 0.6);                          /* px per second */
+      spawnAcc += rate * dt;
+      const head = $('ch-tps').__head;                                        /* chart head: particles aim there */
+      const hy = head ? head[1] + (fx.clientHeight - $('ch-tps').clientHeight) : h * .55;
+      while (spawnAcc >= 1 && parts.length < 400){
+        spawnAcc -= 1;
+        const band = h * (0.25 + 0.5 * Math.random());
+        parts.push({ x: -10, y: band, vx: speed * (0.7 + 0.6*Math.random()), vy: 0, life: 1, len: 6 + Math.random()*14 + Math.min(30, shown/20), ty: hy });
+      }
+      c.globalCompositeOperation = UI.light ? 'source-over' : 'lighter';
+      for (let i = parts.length - 1; i >= 0; i--){
+        const p = parts[i];
+        p.x += p.vx * dt;
+        /* ease toward the chart head's altitude as they cross the card */
+        const prog = Math.min(1, Math.max(0, p.x / w));
+        p.y += (p.ty - p.y) * Math.min(1, dt * (0.4 + prog * 2.2));
+        p.life = p.x > w * 0.82 ? Math.max(0, 1 - (p.x - w*0.82) / (w*0.18)) : 1;
+        if (p.x > w + 20 || p.life <= 0){ parts.splice(i,1); continue; }
+        const a = (0.18 + 0.5 * f) * p.life;
+        const g = c.createLinearGradient(p.x - p.len, p.y, p.x, p.y);
+        g.addColorStop(0, hexA(UI.accent, 0)); g.addColorStop(1, hexA(f > .7 ? UI.accent2 : UI.accent, a));
+        c.strokeStyle = g; c.lineWidth = 1.2 + f; c.beginPath(); c.moveTo(p.x - p.len, p.y); c.lineTo(p.x, p.y); c.stroke();
+        c.fillStyle = hexA('#ffffff', a * .9); c.beginPath(); c.arc(p.x, p.y, .9 + f * .8, 0, Math.PI*2); c.fill();
+      }
+      c.globalCompositeOperation = 'source-over';
+    }
+    if (!document.hidden) raf = requestAnimationFrame(frame);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !raf){ lastT = performance.now(); raf = requestAnimationFrame(frame); } });
+  return { set, peak: () => peak };
+})();
+
+function renderGlobalCharts(snap){
+  const tps = snap.totals.history.total_tps || [];
+  Hero.set(snap.totals);
+  drawLine($('ch-tps'), tps, UI.accent, hexA(UI.accent,.30), {zeroBase:true, hero:true, peak: Hero.peak()});
+
+  const util = snap.totals.history.gpu_util_avg || [];
+  drawLine($('ch-util'), util, UI.info, hexA(UI.info,.22), {min:0,max:100});
+  $('ch-util-now').textContent = `${snap.totals.gpu_util_avg.toFixed(0)}%`;
+}
+
+/* ════════ EVENT ENGINE — every telemetry signal → visible ticker entry + wallpaper pulse ════════ */
+const Events = (() => {
+  const MAX = 6, TTL = 10000;
+  const lastFire = {};   // key → ms timestamp (per-event cooldown)
+  const latch = {};      // key → bool (threshold armed state)
+  const esc = (s) => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+  function push(key, cooldownMs, sev, icon, text, pulse){
+    const now = Date.now();
+    if (key && lastFire[key] && now - lastFire[key] < cooldownMs) return false;
+    if (key) lastFire[key] = now;
+    if (pulse) Engine.pulse(pulse);
+    const feed = $('ev-feed');
+    if (!feed) return true;
+    const el = document.createElement('div');
+    el.className = 'ev ' + sev;
+    const ts = new Date().toTimeString().slice(0, 8);
+    el.innerHTML = `<span class="ic">${icon}</span><span class="tx">${esc(text)}</span><span class="ts">${ts}</span>`;
+    feed.appendChild(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
+    while (feed.children.length > MAX) feed.firstElementChild.remove();
+    setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 500); }, TTL);
+    return true;
+  }
+
+  /* rising-edge with hysteresis: +1 once when v ≥ hi, −1 once it falls back below lo, else 0 */
+  function edge(key, v, hi, lo){
+    if (latch[key]){ if (v < lo){ latch[key] = false; return -1; } return 0; }
+    if (v >= hi){ latch[key] = true; return 1; }
+    return 0;
+  }
+  return { push, edge };
+})();
+
+const _ev = { ticks: 0, tpsAvg: 0, tpsRecord: 0, modelHealth: {}, gpuPids: {}, aer: {}, pcieBad: {} };
+
+function eventPulses(snap){
+  _ev.ticks++;
+  const quiet = _ev.ticks <= 2;                    // prime latches on boot without a toast flurry
+  const E = Events;
+  const P = (...a) => { if (!quiet) E.push(...a); };
+  const t = snap.totals;
+
+  /* ── throughput ── */
+  if (_ev.tpsAvg > 5 && t.total_tps > _ev.tpsAvg * 1.4)
+    P('tps-surge', 20000, 'info', '⚡', `TPS SURGE — ${fmt(t.total_tps,1)} tok/s (+${((t.total_tps/_ev.tpsAvg-1)*100).toFixed(0)}%)`, Math.min(1, (t.total_tps/_ev.tpsAvg - 1) * 0.5));
+  _ev.tpsAvg = _ev.tpsAvg * 0.95 + t.total_tps * 0.05;
+  if (_ev.ticks > 120 && t.total_tps > 20 && _ev.tpsRecord > 0 && t.total_tps > _ev.tpsRecord * 1.02)
+    P('tps-record', 60000, 'info', '◈', `SESSION THROUGHPUT RECORD — ${fmt(t.total_tps,1)} tok/s`, 0.6);
+  _ev.tpsRecord = Math.max(_ev.tpsRecord, t.total_tps);
+
+  /* ── cluster-wide ── */
+  if (E.edge('cl-sat', t.gpu_util_avg, 97, 88) > 0)
+    P('cl-sat-p', 15000, 'info', '▲', `CLUSTER SATURATED — ${t.gpu_util_avg.toFixed(0)}% avg util`, 0.8);
+  if (E.edge('cl-pwr', t.power_pct, 95, 82) > 0)
+    P('cl-pwr-p', 20000, 'warn', '⌁', `POWER CEILING — ${t.power_draw_w.toFixed(0)}W / ${t.power_limit_w.toFixed(0)}W`, 0.7);
+
+  /* ── models ── */
+  for (const m of snap.models){
+    const prev = _ev.modelHealth[m.id];
+    if (prev !== undefined && prev !== m.healthy)
+      E.push(`mh-${m.id}`, 5000, m.healthy ? 'good' : 'crit', '⬤', `${m.label} ${m.healthy ? 'ONLINE' : 'OFFLINE'}`, 1);
+    _ev.modelHealth[m.id] = m.healthy;
+    if (!m.healthy) continue;
+    const eq = E.edge(`mq-${m.id}`, m.waiting, 3, 1);
+    if (eq > 0) P(`mq-p-${m.id}`, 30000, 'warn', '≣', `${m.label} QUEUE BUILDING — ${m.waiting} waiting`, 0.5);
+    else if (eq < 0) P(`mqok-p-${m.id}`, 30000, 'good', '≣', `${m.label} queue drained`, 0.2);
+    if (E.edge(`mkv-${m.id}`, m.kv_cache_pct, 90, 72) > 0)
+      P(`mkv-p-${m.id}`, 30000, 'warn', '▦', `${m.label} KV CACHE ${m.kv_cache_pct.toFixed(0)}%`, 0.5);
+  }
+
+  /* ── per-GPU ── */
+  const spawns = [], exits = [];
+  for (const g of snap.gpus){
+    const id = `G${g.index}`;
+    const eT = E.edge(`tmp-${id}`, g.temperature_c, 83, 74);
+    if (eT > 0) P(`tmp-p-${id}`, 25000, 'crit', '♨', `GPU${g.index} HOT — ${g.temperature_c.toFixed(0)}°C`, 0.9);
+    else if (eT < 0) P(`tmpok-p-${id}`, 25000, 'good', '♨', `GPU${g.index} cooled to ${g.temperature_c.toFixed(0)}°C`, 0.25);
+    if (E.edge(`mem-${id}`, g.memory_pct, 96, 88) > 0)
+      P(`mem-p-${id}`, 30000, 'warn', '▤', `GPU${g.index} VRAM ${g.memory_pct.toFixed(0)}% — ${fmtBytesMib(g.memory_used_mib)}`, 0.5);
+    if (E.edge(`pwr-${id}`, g.power_pct, 97, 84) > 0)
+      P(`pwr-p-${id}`, 30000, 'warn', '⌁', `GPU${g.index} at power limit — ${g.power_draw_w.toFixed(0)}W`, 0.45);
+    if (E.edge(`fan-${id}`, g.fan_pct, 85, 65) > 0)
+      P(`fan-p-${id}`, 30000, 'warn', '❊', `GPU${g.index} FAN ${g.fan_pct.toFixed(0)}%`, 0.4);
+    if (E.edge(`util-${id}`, g.utilization_gpu_pct, 97, 90) > 0)
+      P(`util-p-${id}`, 45000, 'info', '▲', `GPU${g.index} pinned — ${g.utilization_gpu_pct.toFixed(0)}%`, 0.5);
+
+    /* PCIe link state transitions (mirrors card badge logic) */
+    const degraded = (g.pcie_gen >= 2 && g.pcie_gen < g.pcie_gen_max && g.utilization_gpu_pct > 15)
+                  || (g.pcie_width > 0 && g.pcie_width < g.pcie_width_max);
+    const prevBad = _ev.pcieBad[id];
+    if (prevBad !== undefined && degraded !== prevBad)
+      E.push(`pcie-p-${id}`, 10000, degraded ? 'crit' : 'good', '⇄',
+        degraded ? `GPU${g.index} PCIe DEGRADED — Gen${g.pcie_gen} ×${g.pcie_width}`
+                 : `GPU${g.index} PCIe link restored — Gen${g.pcie_gen} ×${g.pcie_width}`, degraded ? 1 : 0.5);
+    _ev.pcieBad[id] = degraded;
+
+    /* PCIe AER counter deltas */
+    const aer = g.pcie_aer || {};
+    const prevAer = _ev.aer[id];
+    if (prevAer){
+      const dc = (aer.total_correctable || 0) - prevAer.c;
+      const df = ((aer.total_fatal || 0) + (aer.total_nonfatal || 0)) - prevAer.f;
+      if (df > 0) E.push(`aerf-p-${id}`, 10000, 'crit', '☒', `GPU${g.index} PCIe AER +${df} fatal/non-fatal`, 1);
+      else if (dc > 0) P(`aerc-p-${id}`, 30000, 'warn', '☒', `GPU${g.index} PCIe AER +${dc} correctable`, 0.5);
+    }
+    _ev.aer[id] = { c: aer.total_correctable || 0, f: (aer.total_fatal || 0) + (aer.total_nonfatal || 0) };
+
+    /* compute process spawn / exit */
+    const pids = new Map((g.processes || []).map(p => [p.pid, p]));
+    const prevPids = _ev.gpuPids[id];
+    if (prevPids){
+      for (const [pid, p] of pids) if (!prevPids.has(pid)) spawns.push({ g: g.index, p });
+      for (const [pid, p] of prevPids) if (!pids.has(pid)) exits.push({ g: g.index, p });
+    }
+    _ev.gpuPids[id] = pids;
+  }
+
+  /* ── boot sequence milestones ── */
+  _ev.boot = _ev.boot || {};
+  for (const s of (snap.sniffed || [])){
+    const B = s.loading && s.loading.boot;
+    if (!B) continue;
+    const prev = _ev.boot[s.id];
+    const st = B.failed ? 'failed' : B.ready ? 'ready' : B.stage;
+    if (prev && prev !== st){
+      const mm = (x) => x == null ? '' : `${Math.floor(x/60)}:${String(Math.round(x%60)).padStart(2,'0')}`;
+      if (st === 'failed') E.push(`bf-${s.id}`, 3000, 'crit', '✖', `${s.name} BOOT FAILED @ ${prev.toUpperCase()} — ${(B.last_error || '').slice(0, 70)}`, 1);
+      else if (st === 'ready') E.push(`br-${s.id}`, 3000, 'good', '◈', `${s.name} ONLINE — boot ${mm(B.elapsed_s)} · first token ${B.ttft_ms} ms`, 1);
+      else P(`bs-${s.id}-${st}`, 3000, 'info', '▶', `${s.name} ${prev.toUpperCase()} ✓ ${mm(B.durations && B.durations[prev])} → ${st.toUpperCase()}`, 0.5);
+    }
+    _ev.boot[s.id] = st;
+  }
+
+  /* ── sniffed model appear / release ── */
+  {
+    const cur = new Map((snap.sniffed || []).map(s => [s.id, s]));
+    if (_ev.sniffed){
+      for (const [id, s] of cur) if (!_ev.sniffed.has(id))
+        P(`sn-${id}`, 8000, 'good', '◆', `MODEL DETECTED — ${s.name}${s.app ? ' · ' + s.app : ''}${s.vram_mib ? ' (' + fmtBytesMib(s.vram_mib) + ' VRAM)' : ''}`, 0.6);
+      for (const [id, nm] of _ev.sniffed) if (!cur.has(id))
+        P(`snx-${id}`, 8000, 'info', '◇', `MODEL RELEASED — ${nm}`, 0.3);
+    }
+    _ev.sniffed = new Map([...cur].map(([id, s]) => [id, s.name]));
+  }
+
+  /* collapse process churn: same pid on several GPUs = one event; cap per tick */
+  const uniq = (list) => {
+    const m = new Map();
+    for (const e of list){ const u = m.get(e.p.pid); if (u) u.gs.push(e.g); else m.set(e.p.pid, { gs: [e.g], p: e.p }); }
+    return [...m.values()];
+  };
+  const pname = (p) => (p.process_name || '').replace(/^.*\//, '').slice(0, 26) || `pid ${p.pid}`;
+  for (const s of uniq(spawns).slice(0, 3))
+    P(`ps-${s.p.pid}`, 4000, 'info', '▶', `GPU${s.gs.join(',')} ▸ ${pname(s.p)} started (${fmtBytesMib(s.p.used_memory_mib)})`, 0.35);
+  for (const x of uniq(exits).slice(0, 3))
+    P(`px-${x.p.pid}`, 4000, 'info', '■', `GPU${x.gs.join(',')} ▪ ${pname(x.p)} exited`, 0.25);
+}
+
+function render(snap, force){
+  lastSnap = snap;
+  /* wallpaper drive: power-gate utilization so busy-wait kernels (100% util at
+     idle wattage, e.g. NCCL barriers) don't summon the storm */
+  const _t = snap.totals || {};
+  const _workFactor = Math.min(1, Math.max(0.15, ((_t.power_pct || 0) - 8) / 30));
+  Engine.drive(((_t.gpu_util_avg || 0) / 100) * _workFactor);
+  const maxT = Math.max(0, ...(snap.gpus || []).map(g => g.temperature_c || 0));
+  Engine.heat((maxT - 35) / 50);                          /* 35°C cool → 85°C+ meltdown */
+  const historyChanged = !!force || renderedHistoryVersion !== historyVersion;
+  const modelsChanged = !!force || renderedModelsVersion !== modelsVersion;
+  renderHeader(snap);
+  if (historyChanged) renderGlobalCharts(snap);
+  if (modelsChanged) renderModels(snap);
+  renderGpus(snap, historyChanged, force ? null : dirtyGpuIndices);
+  if (historyChanged) renderedHistoryVersion = historyVersion;
+  if (modelsChanged) renderedModelsVersion = modelsVersion;
+  dirtyGpuIndices = new Set();
+}
+
+/* connect via SSE with snapshot fallback + staleness watchdog: if the stream
+   goes quiet (proxy hang, dropped socket with no error event, server hiccup)
+   we tear it down and reconnect instead of freezing on the last frame. */
+function mergeStreamFrame(frame){
+  if (!frame || frame.type !== 'update'){
+    lastSnap = frame && frame.snapshot ? frame.snapshot : frame;
+    dirtyGpuIndices = null;
+    historyVersion++;
+    modelsVersion++;
+    return lastSnap;
+  }
+  if (!lastSnap) return null;
+  for (const key of ['generated_at','uptime_seconds','host','driver','cuda','poll_seconds','llm_poll_seconds']){
+    if (Object.prototype.hasOwnProperty.call(frame, key)) lastSnap[key] = frame[key];
+  }
+  const gpuByIndex = new Map((lastSnap.gpus || []).map(g => [g.index, g]));
+  if (dirtyGpuIndices !== null){
+    for (const patch of (frame.gpus || [])) dirtyGpuIndices.add(patch.index);
+  }
+  for (const patch of (frame.gpus || [])){
+    let gpu = gpuByIndex.get(patch.index);
+    if (gpu) Object.assign(gpu, patch);
+    else {
+      gpu = Object.assign({history:{}}, patch);
+      lastSnap.gpus.push(gpu);
+      gpuByIndex.set(gpu.index, gpu);
+    }
+  }
+  if (frame.gpu_remove && frame.gpu_remove.length){
+    const removed = new Set(frame.gpu_remove);
+    lastSnap.gpus = lastSnap.gpus.filter(g => !removed.has(g.index));
+  }
+  if (frame.totals) Object.assign(lastSnap.totals, frame.totals);
+  if (Object.prototype.hasOwnProperty.call(frame, 'models')){
+    lastSnap.models = frame.models;
+    lastSnap.sniffed = frame.sniffed || [];
+    modelsVersion++;
+  }
+  if (frame.history){
+    const max = frame.history.max_points || 180;
+    for (const [index, series] of Object.entries(frame.history.gpus || {})){
+      const gpu = gpuByIndex.get(+index);
+      if (!gpu) continue;
+      gpu.history = gpu.history || {};
+      for (const [key, value] of Object.entries(series)){
+        const values = gpu.history[key] || (gpu.history[key] = []);
+        if (values.length >= max) values.splice(0, values.length - max + 1);
+        values.push(value);
+      }
+    }
+    lastSnap.totals.history = lastSnap.totals.history || {};
+    for (const [key, value] of Object.entries(frame.history.totals || {})){
+      const values = lastSnap.totals.history[key] || (lastSnap.totals.history[key] = []);
+      if (values.length >= max) values.splice(0, values.length - max + 1);
+      values.push(value);
+    }
+    historyVersion++;
+  }
+  return lastSnap;
+}
+
+let renderRaf = 0, pendingRender = null;
+function scheduleRender(snap){
+  pendingRender = snap;
+  if (renderRaf) return;
+  renderRaf = requestAnimationFrame(() => {
+    renderRaf = 0;
+    const next = pendingRender;
+    pendingRender = null;
+    if (next) render(next, false);
+  });
+}
+
+function start(){
+  let es;
+  let lastMsg = Date.now();
+  const restart = (delay) => {
+    clearInterval(watchdog);
+    try { if (es) es.close(); } catch(e){}
+    setTimeout(start, delay);
+  };
+  const watchdog = setInterval(() => {
+    if (Date.now() - lastMsg > 10000){
+      console.warn('nvtop: stream stale >10s — reconnecting');
+      restart(100);
+    }
+  }, 2500);
+  const accept = (frame) => {
+    const snap = mergeStreamFrame(frame);
+    if (!snap) return;
+    eventPulses(snap);
+    scheduleRender(snap);
+  };
+  try{
+    es = new EventSource('/api/stream');
+    es.onmessage = (ev) => {
+      lastMsg = Date.now();
+      try { accept(JSON.parse(ev.data)); }
+      catch(e){ console.error('nvtop: render failed', e); }
+    };
+    es.onerror = () => restart(2000);
+  } catch(e){
+    fetch('/api/snapshot').then(r=>r.json()).then(accept).catch(()=>{});
+    restart(2000);
+  }
+}
+let resizeRaf = 0;
+function rerenderOnResize(){
+  if (resizeRaf) return;
+  resizeRaf = requestAnimationFrame(() => {
+    resizeRaf = 0;
+    if (lastSnap) render(lastSnap, true);
+  });
+}
+window.addEventListener('resize', rerenderOnResize);
+/* in fit mode the GPU cards change size whenever the deck above them does
+   (model appears / load progress shows) — canvases must follow */
+if ('ResizeObserver' in window) new ResizeObserver(rerenderOnResize).observe($('gpus'));
+start();
+</script>
+</body>
+</html>

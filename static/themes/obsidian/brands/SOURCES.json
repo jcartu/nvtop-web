@@ -1,0 +1,280 @@
+{
+	"retrieved_at": "2026-09-05",
+	"notice": "Artwork belongs to its respective publisher and is used for identification, not endorsement. Family marks indicate lineage, not custom fine-tune authorship. Some families share their publisher mark.",
+	"transformations": "Raster profile images normalized to lossless WebP at up to 256px, with original colors and proportions. SVG geometry and colors preserved.",
+	"assets": [
+		{
+			"org": "zai-org",
+			"name": "Z.ai",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/62dc173789b4cf157d36ebee/i_pxzM2ZDo3Ub-BEgIkE9.png",
+			"verified": false,
+			"source": "https://huggingface.co/zai-org",
+			"file": "zai-org.webp",
+			"original_sha256": "4e99514652b98edf65295a07269125e6eab777df376623c2e5ab1ce7d58ba72b",
+			"sha256": "7350e656dd48b98668e29256b01e9d968ef0fc0b7422515e93adb6a44468688d"
+		},
+		{
+			"org": "Qwen",
+			"name": "Qwen",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/6215ca5692c0ecfba9186921/hrRM50-6XcdWgg2AKpENG.jpeg",
+			"verified": false,
+			"source": "https://huggingface.co/Qwen",
+			"file": "qwen.webp",
+			"original_sha256": "0c74f4f564ec24d5fd552b63efd43a9a85214ab4f6c7951e53c0d4328e5967d0",
+			"sha256": "848b000dec95938998f19be1021396cfc58c02e3b3f8d3263a0749f0c8078359"
+		},
+		{
+			"org": "deepseek-ai",
+			"name": "DeepSeek",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/6538815d1bdb3c40db94fbfa/xMBly9PUMphrFVMxLX4kq.png",
+			"verified": true,
+			"source": "https://huggingface.co/deepseek-ai",
+			"file": "deepseek-ai.webp",
+			"original_sha256": "4cd5dd62104f4bfa1caa6bfa3a13e06b1577d24ea03bfd1e78e4c5aea8ceed9f",
+			"sha256": "e79d014de7752ff5c960cfddd9e38dbc2f8eba54b38a4a3e01c6058a0cb6c0fc"
+		},
+		{
+			"org": "moonshotai",
+			"name": "Moonshot AI",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/641c1e77c3983aa9490f8121/X1yT2rsaIbR9cdYGEVu0X.jpeg",
+			"verified": false,
+			"source": "https://huggingface.co/moonshotai",
+			"file": "moonshotai.webp",
+			"original_sha256": "6c9ba98efd7d603b5476db9313617ebffd57a53acb0f9ef724ef4c7288a8a527",
+			"sha256": "8535bcb3bedf1733a33144b266e67a9ca2e5fcf5a58c58be0d318e697b762e98"
+		},
+		{
+			"org": "meta-llama",
+			"name": "Meta Llama",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/646cf8084eefb026fb8fd8bc/oCTqufkdTkjyGodsx1vo1.png",
+			"verified": true,
+			"source": "https://huggingface.co/meta-llama",
+			"file": "meta-llama.webp",
+			"original_sha256": "b202ff7373a9f14706f9cd4afd55cbb4c513e0f53763675dd93552693a623bf8",
+			"sha256": "edd2337d33f10ac4e93e5ce398b94808f30120bf16ef0efaaea8599a9747ca1f"
+		},
+		{
+			"org": "mistralai",
+			"name": "Mistral AI_",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/634c17653d11eaedd88b314d/9OgyfKstSZtbmsmuG8MbU.png",
+			"verified": true,
+			"source": "https://huggingface.co/mistralai",
+			"file": "mistralai.webp",
+			"original_sha256": "a3c07c1b431ee7e2038ab8a6d5b29ba366bc74aaf6ff30a4b32379efc9ab96ad",
+			"sha256": "a84a077551d11f4d946b4137f8e55d57c891d23a989cb95af8bea3e2d27507fb"
+		},
+		{
+			"org": "google",
+			"name": "Google",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/5dd96eb166059660ed1ee413/WtA3YYitedOr9n02eHfJe.png",
+			"verified": true,
+			"source": "https://huggingface.co/google",
+			"file": "google.webp",
+			"original_sha256": "edc0c5c2cfc7c55342343b5d5da24fe18a4deb2f70655082155c9fae3716aa36",
+			"sha256": "45fa806dcf9fa8a354783bb5740455831d47851d1ac114ea27fcbc3868c7c2f4"
+		},
+		{
+			"org": "microsoft",
+			"name": "Microsoft",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/1583646260758-5e64858c87403103f9f1055d.png",
+			"verified": true,
+			"source": "https://huggingface.co/microsoft",
+			"file": "microsoft.webp",
+			"original_sha256": "0013ee76ef5510baab75c1c1517c2b6cc9f5997eb043d1c10f9b863267580584",
+			"sha256": "4be27d10cd23e21cd51b589df0cdba59566b503adb05935d0c2d69c0ce21c851"
+		},
+		{
+			"org": "openai",
+			"name": "OpenAI",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/68783facef79a05727260de3/UPX5RQxiPGA-ZbBmArIKq.png",
+			"verified": true,
+			"source": "https://huggingface.co/openai",
+			"file": "openai.webp",
+			"original_sha256": "51767fd618f19941f3f2ae5a88c526ccc4ca874a0444226f09f6ab6da7346897",
+			"sha256": "d4d9d05b4c2f1c8d3d38261f1fcc9ac621afd5ff1d5e54cd337d34dcfbc23d16"
+		},
+		{
+			"org": "nvidia",
+			"name": "NVIDIA",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/65df9200dc3292a8983e5017/Vs5FPVCH-VZBipV3qKTuy.png",
+			"verified": true,
+			"source": "https://huggingface.co/nvidia",
+			"file": "nvidia.webp",
+			"original_sha256": "75f85aa1b5c95694f9199ae163b0a42ccd45c8ef2870d7dc494c1733b869444d",
+			"sha256": "221fc53e8b9e3dc1a1c23b04186660fd8ebf9dc5163922eee1213e18c5c99d9a"
+		},
+		{
+			"org": "ibm-granite",
+			"name": "IBM Granite",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/639bcaa2445b133a4e942436/CEW-OjXkRkDNmTxSu8Egh.png",
+			"verified": false,
+			"source": "https://huggingface.co/ibm-granite",
+			"file": "ibm-granite.webp",
+			"original_sha256": "b4c42cc14b9475ef087b9f6b69d4a1187ea9ae9d2e5d99815fa273ae1297816f",
+			"sha256": "b05daa4162c527d9d5aba8046d05603fcb2b336be72938200215f2791fe3b15e"
+		},
+		{
+			"org": "ibm",
+			"name": "IBM",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/637bfdf60dc13843b468ac20/9228luWRoGbZwKGxkOOsj.png",
+			"verified": true,
+			"source": "https://huggingface.co/ibm",
+			"file": "ibm.webp",
+			"original_sha256": "b4c42cc14b9475ef087b9f6b69d4a1187ea9ae9d2e5d99815fa273ae1297816f",
+			"sha256": "b05daa4162c527d9d5aba8046d05603fcb2b336be72938200215f2791fe3b15e"
+		},
+		{
+			"org": "CohereLabs",
+			"name": "Cohere Labs",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/1678549441248-5e70f6048ce3c604d78fe133.png",
+			"verified": true,
+			"source": "https://huggingface.co/CohereLabs",
+			"file": "coherelabs.webp",
+			"original_sha256": "254d48df339ba25e3e499a79272037157ac4762fd40ba0119789d257d0593003",
+			"sha256": "f3bed5c08390cc0a4385043a1c1ac612d1ec49682be2d10cabe4406d5b671708"
+		},
+		{
+			"org": "MiniMaxAI",
+			"name": "MiniMax",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/676e38ad04af5bec20bc9faf/dUd-LsZEX0H_d4qefO_g6.jpeg",
+			"verified": false,
+			"source": "https://huggingface.co/MiniMaxAI",
+			"file": "minimaxai.webp",
+			"original_sha256": "4620fb75bcb082cf052911e3e89cb956178a9ad05509539adb8e3b46d3cf0a96",
+			"sha256": "c1d991f8cac95cbd2c05888d6bba7c55b121756c20a90a81fd31ed8c63bce611"
+		},
+		{
+			"org": "tencent",
+			"name": "Tencent",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/5dd96eb166059660ed1ee413/Lp3m-XLpjQGwBItlvn69q.png",
+			"verified": true,
+			"source": "https://huggingface.co/tencent",
+			"file": "tencent.webp",
+			"original_sha256": "496ceb5200e49bc342db1dbd537d7f607c8e9b23ed2ecf45c9a8104d7fb2ae5b",
+			"sha256": "a1538b74b5d75c4f320ba9b418cec2729095ac26ee1ccb1e9bf848b3af3803c2"
+		},
+		{
+			"org": "baidu",
+			"name": "BAIDU",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/64f187a2cc1c03340ac30498/TYYUxK8xD1AxExFMWqbZD.png",
+			"verified": true,
+			"source": "https://huggingface.co/baidu",
+			"file": "baidu.webp",
+			"original_sha256": "5c257f64573362b5ee6d5f38fe9ab8b4aa27437d3cea08a8c17ad8324e5efbd4",
+			"sha256": "28366039005ee9a3a56531a7f6696ae241b8bd7c880484f6dda7e660f0c769a9"
+		},
+		{
+			"org": "internlm",
+			"name": "Intern Large Models",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/6432683407bad11484a68457/Q3Y0dL79GcsnaBCGRMooZ.png",
+			"verified": false,
+			"source": "https://huggingface.co/internlm",
+			"file": "internlm.webp",
+			"original_sha256": "34f6a072a00c54c7e55d0c2598dc883d53b90edb37b700a6c7d5ea61e4972a9c",
+			"sha256": "dbff2b8a9d803ab751eb47c101cf66a26cbc6bb8c4614a8bd215e482341741a8"
+		},
+		{
+			"org": "OpenGVLab",
+			"name": "OpenGVLab",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/64006c09330a45b03605bba3/FvdxiTkTqH8rKDOzGZGUE.jpeg",
+			"verified": false,
+			"source": "https://huggingface.co/OpenGVLab",
+			"file": "opengvlab.webp",
+			"original_sha256": "da853c687dbb8076f51435f4bd28b416230ec882c1bdaf3352bc16e3936ff2f8",
+			"sha256": "626306e66a7fc6773d75857634f961093c37d5a965d24a212ef9d6d977b39c7a"
+		},
+		{
+			"org": "tiiuae",
+			"name": "Technology Innovation Institute",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/61a8d1aac664736898ffc84f/AT6cAB5ZNwCcqFMal71WD.jpeg",
+			"verified": false,
+			"source": "https://huggingface.co/tiiuae",
+			"file": "tiiuae.webp",
+			"original_sha256": "1362487922f958c2e4c4eaadcb208bdb358f1eb8fc159171ce13b9f3e22091b7",
+			"sha256": "6de4ef0aec2c73892a9df1b68451e712a3e0b3d2fc92d364c52398d2f9ca5755"
+		},
+		{
+			"org": "LGAI-EXAONE",
+			"name": "LG AI Research",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/66a899a72f11aaf66001a8dc/UfdrP3GMo9pNT62BaMnhw.png",
+			"verified": false,
+			"source": "https://huggingface.co/LGAI-EXAONE",
+			"file": "lgai-exaone.webp",
+			"original_sha256": "5d6ea5b647c38bce41082ba46dec24d4d75e914eebe6578ba8ca34d8e78aa55e",
+			"sha256": "c82d411b506b311e613dd6f94f29db15157d6ab566acd00b1c4ac59a4453f661"
+		},
+		{
+			"org": "allenai",
+			"name": "Ai2",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/652db071b62cf1f8463221e2/CxxwFiaomTa1MCX_B7-pT.png",
+			"verified": true,
+			"source": "https://huggingface.co/allenai",
+			"file": "allenai.webp",
+			"original_sha256": "044ff8965799a955a4586cb85f8aac3e355b3b95132bd067153cf488ac07c7ed",
+			"sha256": "5611f5aecac847b9f4895436c7b84f1a7e69b209f39f19e1bacbe81b39fe9a56"
+		},
+		{
+			"org": "NousResearch",
+			"name": "NousResearch",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/6317aade83d8d2fd903192d9/tPLjYEeP6q1w0j_G2TJG_.png",
+			"verified": false,
+			"source": "https://huggingface.co/NousResearch",
+			"file": "nousresearch.webp",
+			"original_sha256": "98bb08823857eca43c08089de1d888dc95ecca6bc87a974b6d46cabfb302fc83",
+			"sha256": "b175b119b414e49c8d9a024779f5a64dca72c5eb55ff65a83dc1bc9a82e7f962"
+		},
+		{
+			"org": "HuggingFaceTB",
+			"name": "Hugging Face Smol Models Research",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/651e96991b97c9f33d26bde6/e4VK7uW5sTeCYupD0s_ob.png",
+			"verified": false,
+			"source": "https://huggingface.co/HuggingFaceTB",
+			"file": "huggingfacetb.webp",
+			"original_sha256": "911349a57721ca8b3921cd5c5971f543a917f81eee7bd47e9f9c29da55e786d2",
+			"sha256": "f53da2d77d6838a011e36a151b7c3730c94925968fde897faee7abf8b642cb50"
+		},
+		{
+			"org": "huggingface",
+			"name": "Hugging Face",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/1583856921041-5dd96eb166059660ed1ee413.png",
+			"verified": true,
+			"source": "https://huggingface.co/huggingface",
+			"file": "huggingface.webp",
+			"original_sha256": "e7c20e79c3d18e0547b11021fe1a6af58be7a846dd368c13da08c371f34897c2",
+			"sha256": "dbe8cc94022aff4e434eab159bb849bfb017f4a3d771445065479528ba0fb838"
+		},
+		{
+			"org": "bigcode",
+			"name": "BigCode",
+			"avatar": "https://cdn-avatars.huggingface.co/v1/production/uploads/1659521200179-5e48005437cb5b49818287a5.png",
+			"verified": false,
+			"source": "https://huggingface.co/bigcode",
+			"file": "bigcode.webp",
+			"original_sha256": "fb562c6c95c6f622cf223a1558a6051ca88b6f0235c6fe61ef1c2e660506f814",
+			"sha256": "41e90c3a2b32791373121e08e9486922ccdb6ec2f43a640174f805ddcde94fb3"
+		},
+		{
+			"org": "kimi",
+			"name": "Kimi",
+			"avatar": "https://www.kimi.com/favicon.ico",
+			"source": "https://www.kimi.com/",
+			"file": "kimi.webp",
+			"original_sha256": "df91c1ecf1d4894cf05845cdce44549ed3ccca3478b97a70972d1bc82ac4f2d1",
+			"sha256": "4b599632ed0a1b0b86c2e5366b90577e64dde236d345889e5e661731138dddbb"
+		},
+		{
+			"name": "GLM official project mark",
+			"file": "glm.svg",
+			"source": "https://github.com/zai-org/GLM-5/blob/main/resources/logo.svg",
+			"transformation": "Removed unused Illustrator styles; original paths and colors preserved.",
+			"sha256": "52295e177552c4cd05be75f4bcd717db103f3aa90d79dc76912ca4be58dd04b5"
+		},
+		{
+			"name": "Alibaba Cloud",
+			"file": "alibaba-cloud.webp",
+			"source": "https://www.alibabacloud.com/en",
+			"avatar": "https://img.alicdn.com/imgextra/i3/O1CN01MFtVzX1U9b7T38r3V_!!6000000002475-2-tps-200-200.png",
+			"sha256": "85ee24fc7c42636a4305c34c972b17175fcd00259939a2846f76a77ad72bef07"
+		}
+	]
+}

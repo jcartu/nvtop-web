@@ -1,0 +1,8 @@
+.session-secret
+boot_history.json
+energy_day.json
+__pycache__/
+*.bak*
+*.tmp
+.auth.json
+*.conf
