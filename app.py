@@ -2177,6 +2177,8 @@ def _load_tariff() -> dict[str, Any]:
         "band_limits_kwh": [3900.0, 6000.0],
         "rates_rub_kwh": [7.46, 8.04, 10.86],
         "night_rate_rub_kwh": 4.12,
+        "usd_rub": 82.92,
+        "fx_date": "2026-11-04 CBR",
         "tz": "Europe/Moscow",
     }
     try:
@@ -2301,8 +2303,24 @@ def _seed_cost(state: dict) -> None:
     if kwh > 0.2 and float(state.get("cost_rub") or 0.0) < expected * 0.55:
         state["cost_rub"] = expected
         state["cost_seeded"] = True
+        state["seed_kwh"] = kwh
     elif kwh <= 0.2:
         state["cost_seeded"] = True
+
+
+def _still_approximate() -> bool:
+    """True only while the day still leans on the seeded estimate.
+
+    Once a quarter of the seeded volume has been metered live, the accumulated
+    cost is dominated by real ticks, so the ≈ marker drops away."""
+    if not _energy_day.get("cost_seeded"):
+        return bool(_energy_month.get("cost_seeded"))
+    seed = float(_energy_day.get("seed_kwh") or 0.0)
+    if seed <= 0:
+        return True
+    grown = (float(_energy_day.get("acc_j") or 0.0) + max(
+        0.0, float(_energy_day.get("last_j") or 0.0) - float(_energy_day.get("base_j") or 0.0))) / 3.6e6 - seed
+    return grown < seed * 0.25
 
 
 def _account_energy(total_j: float, now: float) -> dict[str, float]:
@@ -2317,11 +2335,19 @@ def _account_energy(total_j: float, now: float) -> dict[str, float]:
             _energy_day = {}
     if _energy_day and "stamp" not in _energy_day and _energy_day.get("day"):
         _energy_day["stamp"] = _energy_day.pop("day")   # pre-2.3 saves
+    had_month_state = bool(_energy_month)
     if not _energy_month:
         try:
             _energy_month = json.loads(ENERGY_MONTH_FILE.read_text())
         except Exception:
             _energy_month = {}
+    if not _energy_month and _energy_day.get("stamp", "")[:7] == month:
+        # First boot after this feature (or after a lost month file) mid-month:
+        # adopt the day's accumulators instead of pretending the month starts now.
+        _energy_month = {"stamp": month, "base_j": _energy_day.get("base_j", total_j),
+                         "acc_j": _energy_day.get("acc_j", 0.0), "last_j": _energy_day.get("last_j", total_j),
+                         "cost_rub": _energy_day.get("cost_rub", 0.0), "saved": 0.0,
+                         "cost_seeded": _energy_day.get("cost_seeded", False)}
 
     # Month first: its position decides the marginal price for this tick.
     m_kwh_before = 0.0
@@ -2357,7 +2383,7 @@ def _account_energy(total_j: float, now: float) -> dict[str, float]:
         "month_kwh": month_kwh,
         "month_cost_rub": float(_energy_month.get("cost_rub") or 0.0),
         "rate_rub": _rate_for(month_kwh),
-        "seeded": bool(_energy_day.get("cost_seeded") or _energy_month.get("cost_seeded")),
+        "seeded": _still_approximate(),
     }
 
 
@@ -2535,6 +2561,8 @@ def build_snapshot() -> dict[str, Any]:
                 "rate_rub": energy["rate_rub"],
                 "approximate": energy.get("seeded", False),
                 "rates": TARIFF["rates_rub_kwh"],
+                "usd_rub": float(TARIFF.get("usd_rub") or 82.92),
+                "fx_date": TARIFF.get("fx_date") or "",
                 "band_limits": TARIFF["band_limits_kwh"],
                 "place": TARIFF.get("place"),
                 "category": TARIFF.get("category"),
@@ -2803,7 +2831,7 @@ async def auth_gate(request, call_next):
 # Version token for immutable static assets; bump when shipping UI changes.
 # HTML is always no-cache (ETag revalidation), so a bump here propagates on
 # the next page load through every layer (nginx, CDN, browser, direct :8801).
-ASSET_VERSION = "20261104c"
+ASSET_VERSION = "20261104e"
 
 
 @app.middleware("http")

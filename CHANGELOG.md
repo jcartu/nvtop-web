@@ -5,11 +5,13 @@ All notable changes to nvtop-web.
 ## [Unreleased]
 
 ### Load averages, energy cost, calmer instrumentation
-- 1/5/15 min load averages for total throughput, GPU utilisation, and cluster power, computed
+- 1/5/15 min load averages for total throughput, **input and output tok/s**, GPU utilisation and cluster power, computed
   server-side with uptime-style fixed-decay exponentials and seeded on first sample so a restarted
   service starts at truth instead of climbing from zero. Each headline KPI carries the triplet with
   a momentum caret; the other tiles gained a single derived footnote (output share, in:out ratio,
-  daily average draw, ₽/h burn).
+  daily average draw, ₽/h burn). Input and output tiles also carry **$/Mtok** — sustained electrical cost per million
+  tokens in each direction (sustained power × marginal ₽/kWh ÷ sustained tok/s ÷ the day's CBR USD rate) — so the
+  token-metered economics are visible without a spreadsheet.
 - Electricity cost: site tariff for a rural Moscow-region settlement (сельское население), 2026 II полугодие — 7.46 / 8.04 / 10.86 ₽/kWh across the 3900 / 6000 kWh monthly
   bands. Editable `energy_tariff.json` (+ `NVTOP_ELECTRICITY_RATES` override), day and month
   accumulators in Moscow time, marginal-band charging that prices a boundary-crossing tick at the

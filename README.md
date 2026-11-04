@@ -35,9 +35,10 @@ It is built for the machines people actually run inference on: 4×/8× RTX PRO 6
 | Layer | What you see | Source |
 |:--|:--|:--|
 | **Silicon** | Utilization, VRAM allocation and fragmentation, PCIe TX/RX, power draw, cumulative kWh, temperature, fan curves | NVML, 4 Hz |
-| **Serving** | TTFT p50/p95, ITL p50/p95, prefix-cache hit rate, KV-cache occupancy, request queue depth, live token throughput | Prometheus `/metrics` |
+| **Serving** | TTFT p50/p95, ITL p50/p95, prefix-cache hit rate, KV-cache occupancy, request queue depth, live token throughput with 1/5/15 min load averages | Prometheus `/metrics` |
 | **Boot** | Weight loading, CUDA graph capture, warmup, structured progress bars with learned ETA | Engine stdout |
-| **Surface** | Container-query layout, 13 WebGL shader wallpapers, adaptive GPU throttling | Single HTML file |
+| **Economics** | kWh today, ₽/hour burn at the site's banded tariff, month-to-date and projection, $/Mtok of input and output | NVML energy counters + tariff config |
+| **Surface** | Container-query layout, 17 WebGL shader wallpapers, adaptive GPU throttling | Single HTML file |
 
 ### Model identity
 
@@ -90,7 +91,7 @@ package. New provenance fields respect `NVTOP_MASK_NAMES=1`.
   <tr>
     <td width="45%" valign="top">
       <h3>13 live WebGL scenes</h3>
-      <p>Night City, Oblivion, Arrakis, Tokyo, Lumon, The Grid, MUTHUR, Jarvis, and more. Every scene is a single fragment shader rendered at vsync behind the telemetry layer.</p>
+      <p>Liquid Glass, Liquid Chrome, Thermal Scan, Ditherpunk, Night City, Skytower, Arrakis, Tokyo, and more. Every scene is a single fragment shader rendered at vsync behind the telemetry layer.</p>
       <p>The wallpaper is <strong>never allowed to compete with inference</strong>. The renderer reads the live NVML utilization stream and scales its draw budget inversely with GPU load. At peak inference load it drops to zero draw calls and holds the last frame.</p>
       <ul>
         <li>Adaptive throttle: 100% → 0% draw calls as load rises</li>

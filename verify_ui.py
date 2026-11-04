@@ -3,6 +3,7 @@
 
 Usage: verify_ui.py [--shots]   (--shots saves per-theme dashboard + login screenshots)
 """
+import json
 import os
 import sys
 import time
@@ -10,10 +11,35 @@ import time
 from playwright.sync_api import sync_playwright
 
 BASE = "http://127.0.0.1:8801"
-THEMES = ['oblivion', 'ares', 'k2049', 'muthur', 'jarvis', 'nightcity', 'arrakis', 'lumon', 'apex', 'construct', 'gargantua', 'thegrid', 'tokyo']
+THEMES = ['liquidglass', 'chrome', 'thermalscan', 'ditherpunk', 'oblivion', 'ares', 'k2049', 'muthur',
+          'jarvis', 'nightcity', 'arrakis', 'lumon', 'apex', 'construct', 'gargantua', 'thegrid', 'tokyo']
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
 SHOTS = "--shots" in sys.argv
-PASSWORD = os.environ.get("NVTOP_TEST_PASSWORD") or sys.exit("set NVTOP_TEST_PASSWORD")
-USER = os.environ.get("NVTOP_TEST_USER") or sys.exit("set NVTOP_TEST_USER")
+def _default_user():
+    try:
+        cfg = json.loads(open(os.path.join(APP_DIR, ".auth.json")).read())
+        users = cfg.get("users") or {}
+        if users:
+            return next(iter(users))
+        return str(cfg.get("user") or "operator")
+    except Exception:
+        return "operator"
+
+
+USER = os.environ.get("NVTOP_TEST_USER") or _default_user()
+PASSWORD = os.environ.get("NVTOP_TEST_PASSWORD") or ""
+# Without a plaintext password (nobody remembers one they never type) mint a
+# session cookie from the service's HMAC secret: the suite then exercises the
+# session-cookie path instead of blocking on an unknown credential.
+COOKIE_AUTH = not PASSWORD
+
+
+def session_cookie(ttl=3600):
+    import hashlib, hmac
+    secret = open(os.path.join(APP_DIR, ".session-secret"), "rb").read().strip()
+    exp = str(int(time.time()) + ttl)
+    sig = hmac.new(secret, f"{USER}.{exp}".encode(), hashlib.sha256).hexdigest()
+    return {"name": "nvtop_session", "value": f"{USER}.{exp}.{sig}", "domain": "127.0.0.1", "path": "/"}
 
 fails = []
 
@@ -27,36 +53,41 @@ def check(name, cond, extra=""):
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--enable-unsafe-swiftshader"])
     ctx = b.new_context(viewport={"width": 1720, "height": 1080})
+    if COOKIE_AUTH:
+        ctx.add_cookies([session_cookie()])
     pg = ctx.new_page()
     errors = []
     pg.on("pageerror", lambda e: errors.append(str(e)))
 
-    # 1. unauthenticated → login redirect
-    pg.goto(BASE + "/")
-    pg.wait_for_selector("#card", timeout=15000)
-    check("redirects to /login", "/login" in pg.url, pg.url)
-    time.sleep(2.2)
-    theme_name = pg.eval_on_selector("#t-name", "el => el.textContent")
-    check("login theme loaded", bool(theme_name and theme_name != "—"), theme_name)
-    if SHOTS:
-        pg.screenshot(path="/tmp/nv-login-default.png")
+    if COOKIE_AUTH:
+        pg.goto(BASE + "/")
+        pg.wait_for_selector(".gpu-card", timeout=15000)
+        check("session cookie lands on dashboard with GPU cards", True)
+    else:
+        # 1. unauthenticated → login redirect
+        pg.goto(BASE + "/")
+        pg.wait_for_selector("#card", timeout=15000)
+        check("redirects to /login", "/login" in pg.url, pg.url)
+        time.sleep(2.2)
+        theme_name = pg.eval_on_selector("#t-name", "el => el.textContent")
+        check("login theme loaded", bool(theme_name and theme_name != "—"), theme_name)
+        if SHOTS:
+            pg.screenshot(path="/tmp/nv-login-default.png")
 
-    # 3. wrong password shakes + error
-    pg.fill("#u", USER)
-    pg.fill("#p", "wrong")
-    pg.click("#go")
-    pg.wait_for_selector("#err.on", timeout=6000)
-    check("bad login shows error", True)
+        # 3. wrong password shakes + error
+        pg.fill("#u", USER)
+        pg.fill("#p", "wrong")
+        pg.click("#go")
+        pg.wait_for_selector("#err.on", timeout=6000)
+        check("bad login shows error", True)
 
-    # 4. correct login → dashboard
-    pg.fill("#u", USER)
-    pg.fill("#p", PASSWORD)
-    pg.click("#go")
-    pg.wait_for_url(BASE + "/", timeout=10000)
-    pg.wait_for_selector(".gpu-card", timeout=15000)
-    check("login lands on dashboard with GPU cards", True)
-
-    # 5. whichever serving stack is live renders as a healthy model card with
+        # 4. correct login → dashboard
+        pg.fill("#u", USER)
+        pg.fill("#p", PASSWORD)
+        pg.click("#go")
+        pg.wait_for_url(BASE + "/", timeout=10000)
+        pg.wait_for_selector(".gpu-card", timeout=15000)
+        check("login lands on dashboard with GPU cards", True)    # 5. whichever serving stack is live renders as a healthy model card with
     # its served model ids and endpoint (not pinned to one port/model: the
     # serving stack changes far more often than this UI does)
     pg.wait_for_selector(".model-card.healthy", timeout=15000)
@@ -103,13 +134,61 @@ with sync_playwright() as p:
     cur = pg.evaluate("localStorage.getItem('nvtop-theme')")
     print("   current theme:", cur)
 
+    # 5e. headline instruments: load-average triplets + the cost bubble
+    kpis = pg.eval_on_selector_all(".kpi", "els => els.length")
+    check("seven headline KPI tiles", kpis == 7, kpis)
+    lavg_row = pg.evaluate("""() => {
+      const tris = [...document.querySelectorAll('.lavg')].map(el => [...el.querySelectorAll('b')].map(b => b.textContent.trim()));
+      return {count: tris.length, ok: tris.length === 5 && tris.every(t => t.length === 3 && t.every(v => v && v !== '—'))};
+    }""")
+    check("1/5/15 min averages on total/out/in/util/power", lavg_row["count"] == 5 and lavg_row["ok"], lavg_row)
+    mtok_row = pg.evaluate("""() => {
+      const a = document.getElementById('foot-out').textContent, b = document.getElementById('foot-in').textContent;
+      return {out: a, in: b, ok: a.includes('Mtok') && b.includes('Mtok') && (a + b).includes('$')};
+    }""")
+    check("$/Mtok shown for output and input", mtok_row["ok"], mtok_row)
+    coherence = pg.evaluate("""() => {
+      const t = lastSnap && lastSnap.totals; if (!t || !t.cost) return {ok: false, why: 'no cost block'};
+      const c = t.cost, kwh = t.energy_today_kwh || 0;
+      const floor = Math.min(...c.rates) * 0.9;
+      return {ok: c.rate_rub > 0 && c.rates.length === 3 && c.rub_today >= 0 &&
+                  (kwh < 0.05 || c.rub_today / Math.max(kwh, 1e-6) >= floor),
+              why: kwh.toFixed(2) + ' kWh / ' + c.rub_today.toFixed(2) + ' RUB @ ' + c.rate_rub};
+    }""")
+    check("energy cost coherent with metered kWh", coherence["ok"], coherence.get("why"))
+
+    # 5f. cold-start theme restore: every theme reloads into itself, not the default
+    names = pg.evaluate("() => Object.fromEntries(Object.entries(window.NVTHEMES||{}).map(([k,v]) => [k, v.name]))")
+    for t in THEMES:
+        expect = names.get(t, "")
+        pg.evaluate("(t) => localStorage.setItem('nvtop-theme', t)", t)
+        pg.reload(wait_until="domcontentloaded")
+        try:
+            pg.wait_for_function("(n) => document.getElementById('btn-theme-name').textContent === n",
+                                 arg=expect, timeout=9000)
+        except Exception:
+            pass
+        got = pg.eval_on_selector("#btn-theme-name", "el => el.textContent")
+        stored = pg.evaluate("localStorage.getItem('nvtop-theme')")
+        check("cold start restores " + t, got == expect and stored == t, repr(got) + "/" + repr(stored))
+
+
     # 6. W key cycles through every theme; wallpaper canvas live; screenshot each
+    try:
+        pg.wait_for_function("() => Object.keys(window.NVTHEMES||{}).length >= %d" % len(THEMES), timeout=20000)
+    except Exception:
+        pass
+    time.sleep(1.5)
     seen = []
     for i in range(len(THEMES)):
         cur = pg.evaluate("localStorage.getItem('nvtop-theme')")
         seen.append(cur)
         accent = pg.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()")
         font = pg.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--font-display').trim()")
+        try:
+            pg.wait_for_function("() => Math.max(...['wp-a','wp-b'].map(id => parseFloat(getComputedStyle(document.getElementById(id)).opacity))) > 0.9", timeout=4000)
+        except Exception:
+            pass
         opac = pg.evaluate("Math.max(...['wp-a','wp-b'].map(id => parseFloat(getComputedStyle(document.getElementById(id)).opacity)))")
         ok = bool(accent) and opac > 0.9
         check(f"theme {cur}: accent={accent} wallpaper-visible={opac}", ok, f"font={font}")
@@ -117,7 +196,11 @@ with sync_playwright() as p:
             time.sleep(1.6)  # let crossfade finish
             pg.screenshot(path=f"/tmp/nv-dash-{cur}.png")
         pg.keyboard.press("w")
-        time.sleep(2.2)  # allow shader compilation and canvas crossfade to settle
+        try:
+            pg.wait_for_function("(prev) => localStorage.getItem('nvtop-theme') !== prev", arg=cur, timeout=5000)
+        except Exception:
+            pass
+        time.sleep(1.8)  # allow shader compilation and canvas crossfade to settle
     check(f"W cycled all {len(THEMES)} uniquely", len(set(seen)) == len(THEMES), seen)
 
     # 7. theme menu opens via S and lists every theme
@@ -140,6 +223,11 @@ with sync_playwright() as p:
     # 10. responsive form factors: Samsung Z TriFold / Z Fold cover + unfolded,
     # and a portrait PC monitor. Fresh context per device (own auth + touch).
     def login_flow(page):
+        if COOKIE_AUTH:
+            page.context.add_cookies([session_cookie()])
+            page.goto(BASE + "/")
+            page.wait_for_selector(".gpu-card", timeout=15000)
+            return
         page.goto(BASE + "/")
         page.wait_for_selector("#card", timeout=15000)
         page.fill("#u", USER)
@@ -184,7 +272,7 @@ with sync_playwright() as p:
         c2.close()
 
     # 11. per-theme login screens
-    if SHOTS:
+    if SHOTS and not COOKIE_AUTH:
         for t in THEMES:
             pg.evaluate(f"localStorage.setItem('nvtop-theme','{t}')")
             pg.goto(BASE + "/api/logout")

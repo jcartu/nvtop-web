@@ -535,9 +535,13 @@ footer b{color:var(--muted);font-weight:500}
 .live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 10px var(--good);animation:pulse 1.2s infinite;margin-right:6px;vertical-align:middle}
 
 /* ── responsive: foldables / phones / portrait monitors ── */
-@media(max-width:1240px){
-  header.top{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand btns" "kpis kpis"}
-  .kpis{justify-content:flex-start}
+@media(max-width:1470px){
+  header.top{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand btns" "kpis kpis";row-gap:8px}
+  .kpis{justify-content:space-between}
+  .kpi{padding:7px 9px 6px}
+  .kpi .val{font-size:16px}
+  .kpi .lavg{gap:7px}
+  .kpi .foot{font-size:7.5px}
 }
 @media(max-width:820px){
   .brand h1{font-size:17px}
@@ -731,8 +735,10 @@ body.fit #ev-feed{bottom:max(14px,env(safe-area-inset-bottom))}
       <div class="kpi c-accent"><div class="lbl" data-unit="tok/s">Total</div><div class="val" id="kpi-tps">0<span class="unit">tok/s</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div>
         <div class="lavg" id="lavg-tps" title="Load average — exponential moving averages over 1 / 5 / 15 minutes (uptime semantics)"><span><s>1m</s><b>—</b></span><span><s>5m</s><b>—</b></span><span><s>15m</s><b>—</b></span><em>–</em></div></div>
       <div class="kpi c-info"><div class="lbl" data-unit="tok/s">Output</div><div class="val" id="kpi-out">0<span class="unit">tok/s</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div>
+        <div class="lavg" id="lavg-out" title="Load average — 1 / 5 / 15 minute averages of output tok/s"><span><s>1m</s><b>—</b></span><span><s>5m</s><b>—</b></span><span><s>15m</s><b>—</b></span><em>–</em></div>
         <div class="foot" id="foot-out">—</div></div>
       <div class="kpi c-accent2"><div class="lbl" data-unit="tok/s">Input</div><div class="val" id="kpi-in">0<span class="unit">tok/s</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div>
+        <div class="lavg" id="lavg-in" title="Load average — 1 / 5 / 15 minute averages of input tok/s (prefill)"><span><s>1m</s><b>—</b></span><span><s>5m</s><b>—</b></span><span><s>15m</s><b>—</b></span><em>–</em></div>
         <div class="foot" id="foot-in">—</div></div>
       <div class="kpi c-warn"><div class="lbl" data-unit="%">GPU Util</div><div class="val" id="kpi-util">0<span class="unit">%</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div>
         <div class="lavg" id="lavg-util" title="Load average — exponential moving averages over 1 / 5 / 15 minutes (uptime semantics)"><span><s>1m</s><b>—</b></span><span><s>5m</s><b>—</b></span><span><s>15m</s><b>—</b></span><em>–</em></div></div>
@@ -740,7 +746,7 @@ body.fit #ev-feed{bottom:max(14px,env(safe-area-inset-bottom))}
         <div class="lavg" id="lavg-pwr" title="Load average — exponential moving averages over 1 / 5 / 15 minutes (uptime semantics)"><span><s>1m</s><b>—</b></span><span><s>5m</s><b>—</b></span><span><s>15m</s><b>—</b></span><em>–</em></div></div>
       <div class="kpi c-good"><div class="lbl" data-unit="kWh">Today</div><div class="val" id="kpi-kwh">0<span class="unit">kWh</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div>
         <div class="foot" id="foot-kwh">—</div></div>
-      <div class="kpi money"><div class="lbl" data-unit="₽">Cost · today</div><div class="val" id="kpi-cost">₽0<span class="unit">day</span></div><div class="val sz" aria-hidden="true">₽8 888<span class="unit">day</span></div>
+      <div class="kpi money"><div class="lbl" data-unit="₽">Energy cost</div><div class="val" id="kpi-cost">₽0<span class="unit">/day</span></div><div class="val sz" aria-hidden="true">₽8 888<span class="unit">/day</span></div>
         <div class="foot" id="foot-cost">—</div></div>
     </div>
     <div class="hdr-btns">
@@ -784,9 +790,9 @@ body.fit #ev-feed{bottom:max(14px,env(safe-area-inset-bottom))}
   <div class="tm-list"></div>
 </div>
 
-<script src="/static/themes/runner.js?v=20261104c"></script>
+<script src="/static/themes/runner.js?v=20261104e"></script>
 <script>
-const ASSET_VER = '20261104c';
+const ASSET_VER = '20261104e';
 const $ = (id) => document.getElementById(id);
 const setHTML = (el, html) => {
   if (el.__nvtopHTML !== html){ el.innerHTML = html; el.__nvtopHTML = html; }
@@ -998,6 +1004,17 @@ const Engine = (() => {
        choice: only an actual selection is persisted. */
     show(chosen, true, chosen === saved);
     $('btn-theme-name').textContent = (window.NVTHEMES[currentId]||{}).name || 'THEME';
+    if (saved && chosen !== saved && THEME_ORDER.includes(saved)){
+      /* Self-heal: if the operator's theme merely arrived late, swap to it as
+         soon as it registers instead of leaving them on the default. */
+      let watches = 0;
+      const watch = setInterval(() => {
+        if ((window.NVTHEMES || {})[saved]){
+          clearInterval(watch);
+          if (currentId !== saved) show(saved, false, true);
+        } else if (++watches > 64){ clearInterval(watch); }
+      }, 250);
+    }
   }
   function pulse(v){ const r = runner(); if (r) r.pulse(v); }
   function drive(v){ const r = runner(); if (r && r.setDrive) r.setDrive(v); }
@@ -1089,12 +1106,21 @@ const FS = (() => {
 })();
 
 /* Boot the selected theme first; fetch the remaining shaders after load. */
+const _themeInflight = new Map();
 function loadTheme(id, done, priority){
   if ((window.NVTHEMES||{})[id]){ done(); return; }
+  /* One script tag per theme, however many callers ask while it is in flight:
+     boot retries used to enqueue dozens of duplicate tags, exhausting the
+     connection pool and delaying the very load they were waiting for. */
+  if (_themeInflight.has(id)){ _themeInflight.get(id).push(done); return; }
+  const waiters = [done];
+  _themeInflight.set(id, waiters);
   const s = document.createElement('script');
   s.src = '/static/themes/' + id + '.js?v=' + ASSET_VER;
   s.fetchPriority = priority || 'low';
-  s.onload = done; s.onerror = done;
+  const settle = () => { _themeInflight.delete(id); waiters.forEach(fn => { try { fn(); } catch(e){} }); };
+  s.onload = settle;
+  s.onerror = settle;
   document.head.appendChild(s);
 }
 (function loadThemes(){
@@ -1988,27 +2014,45 @@ function renderHeader(snap){
 
   /* ── load averages (uptime semantics) for the three headline instruments ── */
   const lav = t.lavg || {};
-  setLavg('lavg-tps', lav.tps, v => v >= 100 ? fmt(v, 0) : v.toFixed(v >= 10 ? 1 : 0));
+  const tokFmt = v => v >= 100 ? fmt(v, 0) : v.toFixed(v >= 10 ? 1 : 0);
+  setLavg('lavg-tps', lav.tps, tokFmt);
+  setLavg('lavg-out', lav.output, tokFmt);
+  setLavg('lavg-in', lav.input, tokFmt);
   setLavg('lavg-util', lav.util, v => String(Math.round(v)));
-  setLavg('lavg-pwr', lav.power, v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(Math.round(v)));
+  setLavg('lavg-pwr', lav.power, v => String(Math.round(v)));
 
   /* ── footnotes: the single derived number each remaining tile earns ── */
   const setFoot = (id, html) => { const el = $(id); if (el) setHTML(el, html); };
   const outShare = t.total_tps > 0 ? (t.output_tps / t.total_tps) * 100 : 0;
-  setFoot('foot-out', `<b>${outShare.toFixed(0)}%</b> of throughput`);
   const ioRatio = t.output_tps > 1 ? t.input_tps / t.output_tps : 0;
-  setFoot('foot-in', `<b>${ioRatio ? ioRatio.toFixed(1) : '—'}:1</b> in : out`);
-  const mskHours = ((Date.now() / 3600000) + 3) % 24;         // Moscow = UTC+3, no DST
-  setFoot('foot-kwh', `<b>${(kwh / Math.max(mskHours, 0.25)).toFixed(1)} kW</b> avg · day`);
   const cost = t.cost || {};
   const sym = cost.symbol || '₽';
+  /* $/Mtok — what a million tokens actually costs in electricity, per direction.
+     Sustained (15 min) power spread over sustained throughput, converted at the
+     day's CBR rate. Instantaneous bursts would advertise fantasy prices. */
+  const fx = Number(cost.usd_rub) || 0;
+  const rateRub = Number(cost.rate_rub) || 0;
+  const p15 = (Array.isArray(lav.power) && lav.power[2]) || t.power_draw_w || 0;
+  const usdPerMtok = (tps) => (fx > 1 && rateRub > 0 && tps > 2)
+      ? (p15 / 1000) * rateRub / (tps * 0.0036) / fx : null;
+  const usdFmt = (v) => v == null ? '—' : '$' + (v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v.toFixed(3));
+  const usdOut = usdPerMtok((Array.isArray(lav.output) && lav.output[2]) || t.output_tps);
+  const usdIn = usdPerMtok((Array.isArray(lav.input) && lav.input[2]) || t.input_tps);
+  const usdTip = `\n$/Mtok = sustained power × marginal ₽/kWh ÷ sustained tok/s ÷ ${fx.toFixed(2)} ₽/$ (CBR ${cost.fx_date || '—'})`;
+  setFoot('foot-out', `<b>${usdFmt(usdOut)}</b>/Mtok · ${outShare.toFixed(0)}% of total`);
+  setFoot('foot-in', `<b>${usdFmt(usdIn)}</b>/Mtok · ${ioRatio ? ioRatio.toFixed(1) : '—'}:1 i/o`);
+  const fo = $('foot-out'), fi = $('foot-in');
+  if (fo) fo.title = 'Electricity cost per million output tokens' + usdTip;
+  if (fi) fi.title = 'Electricity cost per million input tokens (prefill)' + usdTip;
+  const mskHours = ((Date.now() / 3600000) + 3) % 24;         // Moscow = UTC+3, no DST
+  setFoot('foot-kwh', `<b>${(kwh / Math.max(mskHours, 0.25)).toFixed(1)} kW</b> avg · day`);
   const rub = Number(cost.rub_today || 0);
   const rubTxt = rub >= 1e4 ? (rub / 1000).toFixed(1) + 'k'
     : rub >= 100 ? Math.round(rub).toLocaleString('ru-RU')
     : rub.toFixed(rub >= 10 ? 0 : 1);
-  setKpi('kpi-cost', `${sym}${rubTxt}<span class="unit">day</span>`, 'cost', rub);
+  setKpi('kpi-cost', `${cost.approximate ? '≈' : ''}${sym}${rubTxt}<span class="unit">/day</span>`, 'cost', rub);
   const rateTxt = Number(cost.rate_rub || 0).toFixed(2);
-  setFoot('foot-cost', `<b>${sym}${fmt(cost.rub_hour, 1)}/h</b> · ${rateTxt}${sym.charAt(0)}` + (cost.approximate ? ' †' : ''));
+  setFoot('foot-cost', `<b>${sym}${fmt(cost.rub_hour, 1)}/h</b> · ${sym}${rateTxt}/kWh`);
   const box = $('kpi-cost').closest('.kpi');
   if (box && cost.rates && cost.rates.length === 3){
     box.title = `Electricity · ${cost.place || ''} · ${cost.category || ''} · ${cost.period || ''}\n`
