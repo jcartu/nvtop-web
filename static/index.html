@@ -464,24 +464,55 @@ body.theme-light .thermo .glass{fill:rgba(0,0,0,.05)}
 /* ── meter strips: thick live bar + history, one per metric, dividing the column ── */
 .right{grid-area:right;display:grid;gap:var(--gap);min-width:0;min-height:0}
 .meter{display:flex;flex-direction:column;gap:.35em;min-height:0;min-width:0;padding:.5em .85em .6em;
-  background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:calc(var(--radius)*.6);position:relative;overflow:hidden;
-  transition:border-color .5s}
+  background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.016));
+  border:1px solid var(--line);border-radius:calc(var(--radius)*.6);position:relative;overflow:hidden;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);transition:border-color .5s}
 body.theme-light .meter{background:rgba(255,255,255,.35)}
 .meter .mh{display:flex;align-items:baseline;gap:.7em;flex:none;font-family:var(--mono);min-width:0}
 .meter .label{font-size:.85em;letter-spacing:1.3px;color:var(--muted);text-transform:uppercase;flex:none}
 .meter .pk{font-size:.78em;color:var(--faint);letter-spacing:.8px;flex:none;white-space:nowrap}
 .meter .value{font-size:1.1em;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-left:auto;min-width:0}
-.meter .track{position:relative;flex:none;height:.8em;background:rgba(255,255,255,.05);border-radius:999px;overflow:hidden;border:1px solid var(--line)}
+.meter .track{position:relative;flex:none;height:.8em;border-radius:999px;overflow:hidden;border:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(2,8,16,.55),rgba(20,30,44,.28));
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.45),inset 0 0 10px rgba(0,0,0,.25)}
+/* engraved graduations: an instrument scale rather than an empty tube */
+.meter .track::before{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;
+  background:repeating-linear-gradient(90deg,
+    transparent 0 calc(10% - 2px),
+    rgba(255,255,255,.10) calc(10% - 2px) calc(10% - 1px),
+    rgba(2,8,14,.38) calc(10% - 1px) 10%,
+    transparent 10%)}
+body.theme-light .meter .track::before{background:repeating-linear-gradient(90deg,
+    transparent 0 calc(10% - 2px),
+    rgba(255,255,255,.85) calc(10% - 2px) calc(10% - 1px),
+    rgba(20,40,60,.28) calc(10% - 1px) 10%,
+    transparent 10%)}
 .meter .mh .pk{margin-left:.2em}
 body.theme-light .meter .track{background:rgba(0,0,0,.06)}
 .meter .fill{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:999px;transition:width .22s cubic-bezier(.25,.8,.25,1);
-  background:linear-gradient(90deg,var(--accent),var(--accent2));box-shadow:0 0 10px rgba(var(--accent-rgb),calc(.35*var(--glow)))}
-.meter .fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);animation:slide 2.2s linear infinite;will-change:transform}
+  background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 62%,var(--void)),var(--accent) 46%,var(--accent2));
+  box-shadow:0 0 6px rgba(var(--accent-rgb),calc(.14*var(--glow))),inset 0 1px 0 rgba(255,255,255,.30),inset 0 -1px 0 rgba(0,0,0,.25),1px 0 0 rgba(255,255,255,.35)}
+/* leading-edge bulb: the bar terminates in light, not a cut rectangle */
+.meter .fill::before{content:"";position:absolute;right:0;top:4%;bottom:4%;width:2px;border-radius:1px;
+  background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,.5));
+  box-shadow:0 0 5px rgba(255,255,255,.35);opacity:.85}
+.meter .fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);animation:slide 3.6s linear infinite;will-change:transform;opacity:.8}
 @keyframes slide{from{transform:translate3d(-100%,0,0)}to{transform:translate3d(100%,0,0)}}
-.meter.mem .fill{background:linear-gradient(90deg,var(--info),var(--accent2));box-shadow:0 0 10px rgba(var(--info-rgb),calc(.35*var(--glow)))}
-.meter.power .fill{background:linear-gradient(90deg,var(--accent2),var(--warn) 80%,var(--crit));box-shadow:0 0 10px rgba(var(--warn-rgb),calc(.35*var(--glow)))}
-.meter.util .fill{background:linear-gradient(90deg,var(--accent),var(--accent2))}
-.meter.temp .fill{background:linear-gradient(90deg,var(--good),var(--warn) 70%,var(--crit));box-shadow:0 0 10px rgba(var(--good-rgb),calc(.3*var(--glow)))}
+.meter.mem .fill{background:linear-gradient(90deg,color-mix(in srgb,var(--info) 58%,var(--void)),var(--info) 42%,var(--accent2));
+  box-shadow:0 0 7px rgba(var(--info-rgb),calc(.18*var(--glow))),inset 0 1px 0 rgba(255,255,255,.30)}
+.meter.power .fill{background:linear-gradient(90deg,color-mix(in srgb,var(--accent2) 62%,var(--void)),var(--accent2) 58%,var(--warn) 100%);
+  box-shadow:0 0 7px rgba(var(--accent2-rgb),calc(.18*var(--glow))),inset 0 1px 0 rgba(255,255,255,.30)}
+.meter.util .fill{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 58%,var(--void)),var(--accent) 46%,color-mix(in srgb,var(--accent) 62%,var(--text)));
+  box-shadow:0 0 7px rgba(var(--accent-rgb),calc(.16*var(--glow))),inset 0 1px 0 rgba(255,255,255,.28)}
+.meter.temp .fill{background:linear-gradient(90deg,color-mix(in srgb,var(--good) 58%,var(--void)),var(--good) 45%,var(--warn) 100%);
+  box-shadow:0 0 7px rgba(var(--good-rgb),calc(.16*var(--glow))),inset 0 1px 0 rgba(255,255,255,.26)}
+/* STARK HUD: water-cooled aluminium, not neon tubing — tame saturation, deepen the trough */
+body[data-theme="jarvis"] .meter .fill{filter:saturate(.72) brightness(.94)}
+body[data-theme="jarvis"] .meter{background:linear-gradient(180deg,rgba(120,180,225,.055),rgba(255,255,255,.012))}
+body[data-theme="jarvis"] .meter .track{background:linear-gradient(180deg,rgba(1,7,16,.66),rgba(12,26,44,.34))}
+body[data-theme="jarvis"] .meter.hot .fill,
+body[data-theme="jarvis"] .meter.crit .fill{filter:saturate(.88) brightness(.98)}
+@media(prefers-reduced-motion:reduce){.meter .fill::after{animation:none}}
 .meter.hot{border-color:rgba(var(--warn-rgb),.35)}
 .meter.crit{border-color:rgba(var(--crit-rgb),.45)}
 .meter .hist{display:block;width:100%;height:2.6em;flex:1 1 auto;min-height:0}
@@ -746,7 +777,8 @@ body.fit #ev-feed{bottom:max(14px,env(safe-area-inset-bottom))}
         <div class="lavg" id="lavg-pwr" title="Load average — exponential moving averages over 1 / 5 / 15 minutes (uptime semantics)"><span><s>1m</s><b>—</b></span><span><s>5m</s><b>—</b></span><span><s>15m</s><b>—</b></span><em>–</em></div></div>
       <div class="kpi c-good"><div class="lbl" data-unit="kWh">Today</div><div class="val" id="kpi-kwh">0<span class="unit">kWh</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div>
         <div class="foot" id="foot-kwh">—</div></div>
-      <div class="kpi money"><div class="lbl" data-unit="₽">Energy cost</div><div class="val" id="kpi-cost">₽0<span class="unit">/day</span></div><div class="val sz" aria-hidden="true">₽8 888<span class="unit">/day</span></div>
+      <div class="kpi money"><div class="lbl" data-unit="$/Mtok">Cost · Mtok</div><div class="val" id="kpi-cost">$0.000<span class="unit">/Mtok</span></div><div class="val sz" aria-hidden="true">$8 888<span class="unit">/Mtok</span></div>
+        <div class="lavg" id="lavg-cost" title="Electrical cost per million tokens — sustained averages over 1 / 5 / 15 minutes"><span><s>1m</s><b>—</b></span><span><s>5m</s><b>—</b></span><span><s>15m</s><b>—</b></span><em>–</em></div>
         <div class="foot" id="foot-cost">—</div></div>
     </div>
     <div class="hdr-btns">
@@ -790,9 +822,9 @@ body.fit #ev-feed{bottom:max(14px,env(safe-area-inset-bottom))}
   <div class="tm-list"></div>
 </div>
 
-<script src="/static/themes/runner.js?v=20261104e"></script>
+<script src="/static/themes/runner.js?v=20261104j"></script>
 <script>
-const ASSET_VER = '20261104e';
+const ASSET_VER = '20261104j';
 const $ = (id) => document.getElementById(id);
 const setHTML = (el, html) => {
   if (el.__nvtopHTML !== html){ el.innerHTML = html; el.__nvtopHTML = html; }
@@ -944,6 +976,7 @@ const Engine = (() => {
     active = nextIdx; currentId = id;
     if (remember !== false){ try { localStorage.setItem('nvtop-theme', id); } catch(e){} }
     applyTheme(th.theme);
+    document.body.dataset.theme = id;
     $('btn-theme-name').textContent = th.name;
     $('ft-theme').textContent = th.name;
     if (!silent){ toast(th.name, th.tag); sweep(); }
@@ -1360,10 +1393,10 @@ function drawGpuCharts(card, g){
   const Q = (sel) => card.querySelector(sel);
   const h = g.history || {};
   const pk = (arr) => (arr && arr.length) ? Math.max(...arr) : null;
-  drawLine(Q('[data-role="spark-util"]'), h.util||[], UI.accent2, hexA(UI.accent2,.25), {min:0,max:100});
+  drawLine(Q('[data-role="spark-util"]'), h.util||[], UI.accent, hexA(UI.accent,.22), {min:0,max:100});
   drawLine(Q('[data-role="spark-mem"]'), h.mem||[], UI.info, hexA(UI.info,.25), {min:0,max:100});
   drawLine(Q('[data-role="spark-pwr"]'), h.power||[], UI.warn, hexA(UI.warn,.25), {min:0,max:100});
-  drawLine(Q('[data-role="spark-tmp"]'), h.temp||[], UI.crit, hexA(UI.crit,.22), {min:20,max:95});
+  drawLine(Q('[data-role="spark-tmp"]'), h.temp||[], UI.good, hexA(UI.good,.20), {min:20,max:95});
   const u = pk(h.util), m = pk(h.mem), p = pk(h.power), t = pk(h.temp);
   setText(Q('[data-role="util-pk"]'), u == null ? '—' : 'pk ' + u.toFixed(0) + '%');
   setText(Q('[data-role="mem-pk"]'), m == null ? '—' : 'pk ' + m.toFixed(0) + '%');
@@ -2025,43 +2058,42 @@ function renderHeader(snap){
   const setFoot = (id, html) => { const el = $(id); if (el) setHTML(el, html); };
   const outShare = t.total_tps > 0 ? (t.output_tps / t.total_tps) * 100 : 0;
   const ioRatio = t.output_tps > 1 ? t.input_tps / t.output_tps : 0;
-  const cost = t.cost || {};
-  const sym = cost.symbol || '₽';
-  /* $/Mtok — what a million tokens actually costs in electricity, per direction.
-     Sustained (15 min) power spread over sustained throughput, converted at the
-     day's CBR rate. Instantaneous bursts would advertise fantasy prices. */
-  const fx = Number(cost.usd_rub) || 0;
-  const rateRub = Number(cost.rate_rub) || 0;
-  const p15 = (Array.isArray(lav.power) && lav.power[2]) || t.power_draw_w || 0;
-  const usdPerMtok = (tps) => (fx > 1 && rateRub > 0 && tps > 2)
-      ? (p15 / 1000) * rateRub / (tps * 0.0036) / fx : null;
-  const usdFmt = (v) => v == null ? '—' : '$' + (v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v.toFixed(3));
-  const usdOut = usdPerMtok((Array.isArray(lav.output) && lav.output[2]) || t.output_tps);
-  const usdIn = usdPerMtok((Array.isArray(lav.input) && lav.input[2]) || t.input_tps);
-  const usdTip = `\n$/Mtok = sustained power × marginal ₽/kWh ÷ sustained tok/s ÷ ${fx.toFixed(2)} ₽/$ (CBR ${cost.fx_date || '—'})`;
-  setFoot('foot-out', `<b>${usdFmt(usdOut)}</b>/Mtok · ${outShare.toFixed(0)}% of total`);
-  setFoot('foot-in', `<b>${usdFmt(usdIn)}</b>/Mtok · ${ioRatio ? ioRatio.toFixed(1) : '—'}:1 i/o`);
-  const fo = $('foot-out'), fi = $('foot-in');
-  if (fo) fo.title = 'Electricity cost per million output tokens' + usdTip;
-  if (fi) fi.title = 'Electricity cost per million input tokens (prefill)' + usdTip;
+  setFoot('foot-out', `<b>${outShare.toFixed(0)}%</b> of total`);
+  setFoot('foot-in', `<b>${ioRatio ? ioRatio.toFixed(1) : '—'}:1</b> in : out`);
   const mskHours = ((Date.now() / 3600000) + 3) % 24;         // Moscow = UTC+3, no DST
   setFoot('foot-kwh', `<b>${(kwh / Math.max(mskHours, 0.25)).toFixed(1)} kW</b> avg · day`);
-  const rub = Number(cost.rub_today || 0);
-  const rubTxt = rub >= 1e4 ? (rub / 1000).toFixed(1) + 'k'
-    : rub >= 100 ? Math.round(rub).toLocaleString('ru-RU')
-    : rub.toFixed(rub >= 10 ? 0 : 1);
-  setKpi('kpi-cost', `${cost.approximate ? '≈' : ''}${sym}${rubTxt}<span class="unit">/day</span>`, 'cost', rub);
-  const rateTxt = Number(cost.rate_rub || 0).toFixed(2);
-  setFoot('foot-cost', `<b>${sym}${fmt(cost.rub_hour, 1)}/h</b> · ${sym}${rateTxt}/kWh`);
+  const cost = t.cost || {};
+  const sym = cost.symbol || '₽';
+  /* $-per-million-tokens is the number that matters for a token-metered API:
+     sustained marginal power × tariff ÷ sustained tok/s, converted at CBR.
+     Per-direction for the direction cards, blended for this instrument. */
+  const fx = Number(cost.usd_rub) || 0;
+  const rateRub = Number(cost.rate_rub) || 0;
+  const mount = (watts, tps) => (fx > 1 && rateRub > 0 && watts > 0 && tps > 2)
+      ? (watts / 1000) * rateRub / (tps * 0.0036) / fx : null;
+  const usdFmt = (v) => v == null ? '—' : '$' + (v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v.toFixed(3));
+  const win = (channel, i) => (Array.isArray(lav[channel]) && lav[channel][i]) || 0;
+  const pWin = (i) => win('power', i) || t.power_draw_w || 0;
+  const usdIn = mount(pWin(2), win('input', 2) || t.input_tps);
+  const usdOut = mount(pWin(2), win('output', 2) || t.output_tps);
+  const costTri = [0, 1, 2].map(i => mount(pWin(i), win('tps', i) || t.total_tps));
+  const costNow = costTri[0];
+  setKpi('kpi-cost', `${usdFmt(costNow)}<span class="unit">/Mtok</span>`, 'cost', costNow || 0);
+  setLavg('lavg-cost', costTri, usdFmt);
+  setFoot('foot-cost', `in <b>${usdFmt(usdIn)}</b> · out <b>${usdFmt(usdOut)}</b>`);
+  const usdTip = `\n$/Mtok = sustained W × marginal ${sym}/kWh ÷ sustained tok/s ÷ ${fx.toFixed(2)} ${sym}/$ (CBR ${cost.fx_date || '—'})`;
+  const fc = $('foot-cost');
+  if (fc) fc.title = 'Blended cost per million tokens; per-direction 15 min figures below' + usdTip;
   const box = $('kpi-cost').closest('.kpi');
   if (box && cost.rates && cost.rates.length === 3){
-    box.title = `Electricity · ${cost.place || ''} · ${cost.category || ''} · ${cost.period || ''}\n`
-      + `marginal ${rateTxt} ${sym}/kWh · bands ≤${(cost.band_limits[0]).toFixed(0)} kWh @ ${cost.rates[0].toFixed(2)}, `
+    box.title = `Token economics · ${cost.place || ''} · ${cost.category || ''} · ${cost.period || ''}\n`
+      + `marginal ${rateRub.toFixed(2)} ${sym}/kWh · bands ≤${(cost.band_limits[0]).toFixed(0)} kWh @ ${cost.rates[0].toFixed(2)}, `
       + `≤${(cost.band_limits[1]).toFixed(0)} @ ${cost.rates[1].toFixed(2)}, above @ ${cost.rates[2].toFixed(2)}\n`
-      + `today ${sym}${Number(cost.rub_today || 0).toFixed(0)} · ${Number(cost.kwh_today || 0).toFixed(1)} kWh`
+      + `per Mtok: blended ${usdFmt(costTri[2])} · input ${usdFmt(usdIn)} · output ${usdFmt(usdOut)}\n`
+      + `today ${sym}${Number(cost.rub_today || 0).toFixed(0)} · ${Number(cost.kwh_today || 0).toFixed(1)} kWh · ${sym}${fmt(cost.rub_hour, 1)}/h`
       + ` · month ${sym}${Number(cost.rub_month || 0).toFixed(0)} (${Number(cost.kwh_month || 0).toFixed(0)} kWh)`
       + ` · projection ${sym}${Number(cost.rub_month_projected || 0).toFixed(0)}`
-      + (cost.approximate ? '\n† kWh from before cost tracking priced at the entry band' : '');
+      + (cost.approximate ? '\n≈ kWh from before cost tracking priced at the entry band' : '');
   }
 }
 

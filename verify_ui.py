@@ -139,14 +139,18 @@ with sync_playwright() as p:
     check("seven headline KPI tiles", kpis == 7, kpis)
     lavg_row = pg.evaluate("""() => {
       const tris = [...document.querySelectorAll('.lavg')].map(el => [...el.querySelectorAll('b')].map(b => b.textContent.trim()));
-      return {count: tris.length, ok: tris.length === 5 && tris.every(t => t.length === 3 && t.every(v => v && v !== '—'))};
+      return {count: tris.length, ok: tris.length === 6 && tris.every(t => t.length === 3 && t.every(v => v && v !== '—'))};
     }""")
-    check("1/5/15 min averages on total/out/in/util/power", lavg_row["count"] == 5 and lavg_row["ok"], lavg_row)
+    check("1/5/15 min averages on total/out/in/util/power/cost", lavg_row["count"] == 6 and lavg_row["ok"], lavg_row)
     mtok_row = pg.evaluate("""() => {
-      const a = document.getElementById('foot-out').textContent, b = document.getElementById('foot-in').textContent;
-      return {out: a, in: b, ok: a.includes('Mtok') && b.includes('Mtok') && (a + b).includes('$')};
+      const val = document.getElementById('kpi-cost').textContent;
+      const foot = document.getElementById('foot-cost').textContent;
+      const tri = [...document.querySelectorAll('#lavg-cost b')].map(b => b.textContent);
+      return {val: val, foot: foot, tri: tri,
+              ok: val.includes('/Mtok') && /[0-9]/.test(val) && tri.length === 3 &&
+                  foot.toLowerCase().includes('out') && (val + foot).includes('$')};
     }""")
-    check("$/Mtok shown for output and input", mtok_row["ok"], mtok_row)
+    check("cost instrument is $/Mtok with in/out split", mtok_row["ok"], mtok_row)
     coherence = pg.evaluate("""() => {
       const t = lastSnap && lastSnap.totals; if (!t || !t.cost) return {ok: false, why: 'no cost block'};
       const c = t.cost, kwh = t.energy_today_kwh || 0;

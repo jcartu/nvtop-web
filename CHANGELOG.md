@@ -16,8 +16,14 @@ All notable changes to nvtop-web.
   bands. Editable `energy_tariff.json` (+ `NVTOP_ELECTRICITY_RATES` override), day and month
   accumulators in Moscow time, marginal-band charging that prices a boundary-crossing tick at the
   correct split rate, driver-counter-reset rebasing, and a month-to-date projection. Exposed as
-  `totals.cost` and rendered as a dedicated COST · TODAY bubble beside the kWh tile; kWh accrued
+  `totals.cost` and re-shaped as a twin: the **COST · MTOK** instrument leads with blended treating-cost-per-million-tokens
+  and its own 1/5/15 min averages, per-direction input/output $/Mtok underneath, with ₽/day, ₽/h and
+  month-to-date moved into the tooltip; kWh accrued
   before the feature existed is priced at the entry band and flagged approximate.
+- GPU meter strips rebuilt for the STARK HUD (and every theme): engraved 10% graduations visible through
+  filled and empty track, colour-mixed gradients anchored in the theme's own void, a crisp 2 px leading
+  cursor instead of a glossy dome, halved bloom, and sparklines recoloured to match their bar (util cyan,
+  temperature mint) so a cool GPU no longer plots an alarming red line.
 - Legibility pass aimed at eye strain: global glow halved, per-theme shader exposure (`theme.dim`)
   and panel alpha floors, calmer KPI sheen and tighter numeral halos, taller panel blur, and an
   automatic contrast lifter in the theme engine. The lifter composites the real panel-over-void
