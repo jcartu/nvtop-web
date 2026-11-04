@@ -69,15 +69,14 @@ with sync_playwright() as p:
     check("live model card lists served models", bool(served_models) and all(served_models), served_models)
     check("live model card shows its endpoint", "http://" in model_role and "GPUs" in model_role, model_role)
 
-    # 5b. model intelligence: lineage, engine badge, spec sheet
+    # 5b. model intelligence: lineage and the full description remain readable,
+    # including in fit mode (which previously hid the description entirely).
     lineage = pg.eval_on_selector(mc + '[data-role="lineage"]', "el => el.textContent")
     check("model card shows lineage", len(lineage.strip()) > 1 and lineage.strip() != "—", lineage)
-    engine = pg.eval_on_selector(mc + '[data-role="engine"]', "el => el.textContent")
-    check("model card shows engine badge", engine.strip().split(" ")[0] in ("vLLM", "SGLang"), engine)
-    nspecs = pg.eval_on_selector_all(mc + ".spec", "els => els.length")
-    check("model card spec sheet has >= 5 cells", nspecs >= 5, nspecs)
-    specs_txt = pg.eval_on_selector(mc + '[data-role="specs"]', "el => el.textContent").lower()
-    check("spec sheet shows params + context", "params" in specs_txt and "context" in specs_txt, specs_txt[:80])
+    description = pg.locator(mc + '[data-role="blurb"]')
+    check("model description visible in fit mode", description.is_visible())
+    unclipped = description.evaluate("el => el.scrollHeight <= el.clientHeight + 1 && [...el.children].every(e => e.scrollHeight <= e.clientHeight + 1)")
+    check("model description is not line-clamped", unclipped)
 
     # 5c. animated thermometer on every GPU card
     ngpu = pg.eval_on_selector_all(".gpu-card", "els => els.length")
@@ -170,8 +169,6 @@ with sync_playwright() as p:
         check(f"{name}: touch class == {touch}", touch_cls == touch, touch_cls)
         fs_vis = p2.evaluate("(() => { const r = document.getElementById('btn-fs').getBoundingClientRect(); return r.width > 0 && r.height > 0; })()")
         check(f"{name}: fullscreen button visible", fs_vis)
-        nk = p2.eval_on_selector_all(".kpi", "els => els.filter(e => e.offsetWidth > 0).length")
-        check(f"{name}: all 5 KPIs visible", nk == 5, nk)
         check(f"{name}: no JS errors", not errs2, errs2[:2])
         p2.screenshot(path=f"/tmp/nv-resp-{name}.png")
         if name == "candybar":

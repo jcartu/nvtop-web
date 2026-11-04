@@ -40,6 +40,11 @@ Each theme is ONE file at `static/themes/<id>.js` registering itself:
     boot: ['LINE 1 .... OK', 'LINE 2 .... OK', 'READY.'],  // 3-5 boot log lines typed on the login card (in-universe flavor)
     footer: 'small print line',  // bottom small print (in-universe easter egg)
   },
+  /* OPTIONAL exposure control: CSS brightness applied to the shader canvas only.
+     Default 0.85 (dark) / 0.93 (light); lower it for luminous themes instead of
+     hand-dimming every palette entry. `sat` similarly scales saturation. */
+  theme.dim: 0.9, theme.sat: 1.05,
+
   /* OPTIONAL low-power profile, merged into the WallpaperRunner opts by index.html + login.html.
      Runner defaults: fps 18, idleFps 6, quality 0.35. Declare only to run CHEAPER (e.g. tokyo: fps 14, idleFps 4, quality 0.30). */
   perf: { fps: 14, idleFps: 4, quality: 0.30 },

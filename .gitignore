@@ -1,6 +1,8 @@
 .session-secret
 boot_history.json
 energy_day.json
+energy_month.json
+energy_tariff.json
 __pycache__/
 *.bak*
 *.tmp

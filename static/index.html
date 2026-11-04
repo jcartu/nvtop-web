@@ -35,6 +35,7 @@
   --info-rgb:87,200,255;
   --radius:16px;
   --glow:1;
+  --wp-dim:.88;
   --font-display:'Inter',system-ui,sans-serif;
   --font-head:'Inter',system-ui,sans-serif;
   --font-mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
@@ -46,7 +47,8 @@ html{scrollbar-gutter:stable}
 html,body{margin:0;padding:0;background:var(--void);color:var(--text);font-family:var(--sans);min-height:100vh}
 body{overflow-x:hidden;transition:background-color .8s ease}
 /* ── wallpaper engine layers ── */
-#wp-a,#wp-b{position:fixed;inset:0;width:100vw;height:100vh;z-index:0;opacity:0;transition:opacity 1.15s ease;background:var(--void)}
+#wp-a,#wp-b{position:fixed;inset:0;width:100vw;height:100vh;z-index:0;opacity:0;transition:opacity 1.15s ease,filter .8s ease;background:var(--void);
+  filter:brightness(var(--wp-dim,.88)) saturate(var(--wp-sat,1))}
 .vig{position:fixed;inset:0;z-index:1;pointer-events:none;
   background:radial-gradient(ellipse at 50% 38%,transparent 30%,rgba(0,0,0,.28) 78%,rgba(0,0,0,.55) 100%)}
 body.theme-light .vig{background:radial-gradient(ellipse at 50% 38%,transparent 40%,rgba(255,255,255,.12) 80%,rgba(190,205,212,.30) 100%)}
@@ -126,14 +128,15 @@ header.top{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-templ
 #hostline{display:contents}
 #hostline span{flex:none;white-space:nowrap}
 .hdr-btns{grid-area:btns;display:flex;align-items:center;gap:8px}
-.kpis{grid-area:kpis;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;min-width:0}
+.kpis{grid-area:kpis;display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;align-items:stretch;min-width:0}
 .kpi{
-  background:var(--panel);border:1px solid var(--line);border-radius:calc(var(--radius)*.85);padding:8px 12px;flex:none;
-  backdrop-filter:blur(14px);position:relative;overflow:hidden;
+  background:var(--panel);border:1px solid var(--line);border-radius:calc(var(--radius)*.85);padding:8px 12px 7px;flex:none;
+  backdrop-filter:blur(16px) saturate(1.06);position:relative;overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
   transition:background-color .7s,border-color .7s
 }
-.kpi::after{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 40%,rgba(255,255,255,.05) 50%,transparent 60%);
-  animation:shine 5s linear infinite;will-change:transform;pointer-events:none}
+.kpi::after{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 42%,rgba(255,255,255,.032) 50%,transparent 58%);
+  animation:shine 7.5s linear infinite;will-change:transform;pointer-events:none}
 @keyframes shine{from{transform:translate3d(100%,0,0)}to{transform:translate3d(-100%,0,0)}}
 .kpi .lbl{font-family:var(--mono);font-size:9px;letter-spacing:1.3px;color:var(--muted);text-transform:uppercase;white-space:nowrap}
 .kpi .val{font-family:var(--mono);font-size:18px;font-weight:700;line-height:1.1;margin-top:2px;transition:color .7s;
@@ -142,14 +145,40 @@ header.top{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-templ
    the tile's width comes from it, so live digits never resize the tile. */
 .kpi .val.sz{visibility:hidden;height:0;margin:0;overflow:hidden;padding-right:4px;pointer-events:none}
 .kpi .unit{font-size:10px;color:var(--muted);margin-left:3px;font-weight:500}
-.kpi.c-accent .val{color:var(--accent);text-shadow:0 0 18px rgba(var(--accent-rgb),calc(.4*var(--glow)))}
-.kpi.c-accent2 .val{color:var(--accent2);text-shadow:0 0 18px rgba(var(--accent2-rgb),calc(.4*var(--glow)))}
-.kpi.c-info .val{color:var(--info);text-shadow:0 0 18px rgba(var(--info-rgb),calc(.35*var(--glow)))}
-.kpi.c-warn .val{color:var(--warn);text-shadow:0 0 18px rgba(var(--warn-rgb),calc(.35*var(--glow)))}
-.kpi.c-crit .val{color:var(--crit);text-shadow:0 0 18px rgba(var(--crit-rgb),calc(.35*var(--glow)))}
-.kpi.c-good .val{color:var(--good);text-shadow:0 0 18px rgba(var(--good-rgb),calc(.35*var(--glow)))}
+.kpi.c-accent .val{color:var(--accent);text-shadow:0 0 12px rgba(var(--accent-rgb),calc(.34*var(--glow)))}
+.kpi.c-accent2 .val{color:var(--accent2);text-shadow:0 0 12px rgba(var(--accent2-rgb),calc(.32*var(--glow)))}
+.kpi.c-info .val{color:var(--info);text-shadow:0 0 12px rgba(var(--info-rgb),calc(.3*var(--glow)))}
+.kpi.c-warn .val{color:var(--warn);text-shadow:0 0 12px rgba(var(--warn-rgb),calc(.3*var(--glow)))}
+.kpi.c-crit .val{color:var(--crit);text-shadow:0 0 12px rgba(var(--crit-rgb),calc(.3*var(--glow)))}
+.kpi.c-good .val{color:var(--good);text-shadow:0 0 12px rgba(var(--good-rgb),calc(.3*var(--glow)))}
 .kpi.bump .val{animation:bump .45s cubic-bezier(.2,.9,.3,1.4)}
 @keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.06)}100%{transform:scale(1)}}
+/* ── uptime-style load averages, one triplet per instrument ──
+   1/5/15 min exponentially weighted like `uptime`: the quarterly figure is the
+   slow truth, the 1 min one tells you which way it is heading. */
+.kpi .lavg{display:flex;align-items:flex-end;gap:8px;margin-top:5px;padding-top:4px;border-top:1px solid var(--line);
+  font-family:var(--mono);white-space:nowrap;line-height:1}
+.kpi .lavg span{display:flex;flex-direction:column;gap:1.5px;opacity:.9}
+.kpi .lavg span:nth-child(1){opacity:.68}
+.kpi .lavg span:nth-child(2){opacity:.84}
+.kpi .lavg s{text-decoration:none;font-size:7px;letter-spacing:.09em;color:var(--muted);opacity:.78;text-transform:uppercase}
+.kpi .lavg b{font-size:10.5px;font-weight:700;color:var(--text);opacity:.88;font-variant-numeric:tabular-nums;transition:color .5s}
+.kpi .lavg em{font-style:normal;font-size:8px;line-height:1;margin-left:auto;padding:1px 3px 2px;border-radius:3px;
+  color:var(--muted);border:1px solid transparent;opacity:.75}
+.kpi .lavg em.up{color:var(--good);border-color:rgba(var(--good-rgb),.3)}
+.kpi .lavg em.down{color:var(--warn);border-color:rgba(var(--warn-rgb),.28)}
+.kpi .lavg:hover b{color:var(--accent)}
+/* footnotes for the tiles that carry a single derived figure instead */
+.kpi .foot{margin-top:5px;padding-top:4px;border-top:1px solid var(--line);font-family:var(--mono);font-size:8px;
+  letter-spacing:.07em;color:var(--faint);white-space:nowrap;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis}
+.kpi .foot b{color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums}
+/* cost bubble: warmer, lifted off the strip — money deserves its own light */
+.kpi.money{border-color:rgba(var(--accent2-rgb),.42);
+  background:linear-gradient(152deg,rgba(var(--accent2-rgb),.17),rgba(var(--accent2-rgb),.035) 48%,transparent 72%),var(--panel);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),inset 0 0 0 1px rgba(var(--accent2-rgb),.06),0 8px 26px -16px rgba(var(--accent2-rgb),.95)}
+.kpi.money .lbl{color:var(--accent2);opacity:.92}
+.kpi.money .val{color:var(--accent2);text-shadow:0 0 14px rgba(var(--accent2-rgb),calc(.42*var(--glow)))}
+.kpi.money .foot b{color:var(--accent2)}
 
 .btn{
   font-family:var(--font-mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
@@ -189,12 +218,12 @@ header.top{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-templ
 @keyframes crestbreathe{0%,100%{box-shadow:0 0 14px rgba(var(--accent-rgb),calc(.18*var(--glow))),inset 0 0 12px rgba(var(--accent-rgb),.10)}
   50%{box-shadow:0 0 26px rgba(var(--accent-rgb),calc(.4*var(--glow))),inset 0 0 18px rgba(var(--accent-rgb),.2)}}
 .model-card .ident-tx{min-width:0}
-.model-card .name{font-weight:800;font-size:15.5px;font-family:var(--font-head);line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.model-card .lineage{font-family:var(--mono);font-size:9.5px;color:var(--muted);letter-spacing:.8px;margin-top:3px;text-transform:uppercase;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.model-card .name{font-weight:800;font-size:15.5px;font-family:var(--font-head);line-height:1.25;overflow-wrap:anywhere}
+.model-card .lineage{font-family:var(--mono);font-size:9.5px;color:var(--muted);letter-spacing:.8px;margin-top:4px;text-transform:uppercase;
+  line-height:1.5;overflow-wrap:anywhere}
 .model-card .lineage b{color:var(--accent);font-weight:700}
 .model-card .lineage i{color:var(--faint);font-style:normal}
-.model-card .head-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 1 auto;min-width:0;max-width:55%}
+.model-card .head-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto;min-width:0;max-width:40%}
 .model-card .status{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:1.2px;text-transform:uppercase}
 .model-card .status .blip{width:8px;height:8px;border-radius:50%;background:var(--crit);box-shadow:0 0 8px var(--crit)}
 .model-card.healthy .status .blip{background:var(--good);box-shadow:0 0 10px var(--good);animation:pulse 1.4s infinite}
@@ -203,10 +232,13 @@ header.top{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-templ
   color:var(--accent2);border:1px solid rgba(var(--accent2-rgb),.4);background:rgba(var(--accent2-rgb),.07);text-transform:uppercase}
 .model-card .role{font-family:var(--mono);font-size:9.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:5px 0 7px}
 .model-card .meta{display:contents}
-.model-card .blurb{font-size:11px;line-height:1.45;color:var(--text);opacity:.85;font-style:italic;margin:0 0 8px;
-  border-left:2px solid rgba(var(--accent-rgb),.4);padding-left:10px}
-.model-card .blurb .src{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
-  color:var(--muted);font-style:normal;font-size:10.5px;line-height:1.4;margin-top:3px}
+.model-card .blurb{font-size:12px;line-height:1.6;color:var(--text);margin:10px 0;
+  border-left:2px solid rgba(var(--accent-rgb),.5);padding-left:12px;overflow-wrap:anywhere}
+.model-card .blurb .src{display:block;color:var(--muted);font-size:11.5px;line-height:1.55;margin-top:5px}
+.model-card .weight-source{margin:8px 0 10px;padding-top:8px;border-top:1px solid var(--line);font-family:var(--mono);font-size:9.5px;line-height:1.5}
+.model-card .weight-source .source-row{display:grid;grid-template-columns:6em minmax(0,1fr);gap:8px;margin-top:3px}
+.model-card .weight-source .source-label{color:var(--faint);text-transform:uppercase;letter-spacing:.8px}
+.model-card .weight-source .source-value{color:var(--muted);overflow-wrap:anywhere;min-width:0}
 .model-card .served{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:7px;display:flex;flex-wrap:wrap;gap:5px}
 .model-card .served .tag{padding:2px 7px;border-radius:calc(var(--radius)*.4);background:rgba(255,255,255,.05);border:1px solid var(--line)}
 .specs{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;margin-bottom:8px}
@@ -216,6 +248,8 @@ body.theme-light .spec{background:rgba(255,255,255,.4)}
 .spec::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 42%,rgba(var(--accent-rgb),.06) 50%,transparent 58%);
   animation:shine 7s linear infinite;will-change:transform;pointer-events:none}
 .spec .v{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.model-card .spec .v{white-space:normal;overflow-wrap:anywhere}
+.model-card .spec.variant{grid-column:1 / -1}
 .spec .v b{color:var(--accent);font-weight:700;text-shadow:0 0 12px rgba(var(--accent-rgb),calc(.4*var(--glow)))}
 .spec .l{font-family:var(--mono);font-size:8.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-top:2px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -514,9 +548,11 @@ footer b{color:var(--muted);font-weight:500}
   header.top{margin-bottom:10px;gap:8px}
   .brand h1{font-size:16px}
   .brand .sub{font-size:8.5px}
-  /* five equal tracks share the row; tiles shrink and clip instead of wrapping */
-  .kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+  /* KPI tracks share the row; tiles shrink and clip instead of wrapping */
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
   .kpi{min-width:0;padding:6px 7px}
+  .kpi .lavg,.kpi .foot{display:none}
+  .kpi.money{grid-column:span 2}
   .kpi .val{font-size:13px}
   .kpi .val.sz{display:none}
   .kpi .unit{font-size:8px;margin-left:2px}
@@ -565,38 +601,39 @@ body.fit .wrap{height:100dvh;max-width:none;display:grid;grid-template-rows:auto
 body.fit header.top{margin:0}
 body.fit .deck{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,clamp(300px,32vw,1100px));gap:10px;align-items:stretch;min-height:0}
 body.fit .section-title{display:none}
-body.fit .global-charts{order:2;display:grid;grid-template-columns:1.55fr 1fr;gap:10px;margin:0;max-height:clamp(96px,17vh,190px);min-height:96px;align-self:stretch}
+body.fit .global-charts{order:2;display:grid;grid-template-columns:1.55fr 1fr;gap:10px;margin:0;min-height:96px;align-self:stretch;contain:size}
 body.fit .chart-card{display:flex;flex-direction:column;padding:8px 12px 9px;min-height:0}
 body.fit .chart-card .h{margin-bottom:4px;flex:none}
 body.fit .chart-card canvas{flex:1 1 auto;height:auto;min-height:40px}
 body.fit #tps-fx{flex:none;height:100%;position:absolute}
 body.fit .models-grid{display:flex;flex-wrap:wrap;gap:10px;margin:0;align-content:flex-start;
-  max-height:clamp(96px,34vh,420px);overflow:auto;scrollbar-width:thin;min-height:96px}
+  max-height:clamp(180px,42vh,480px);overflow:auto;scrollbar-width:thin;min-height:96px}
 body.fit .models-grid:not(.ready){min-height:96px}
 /* a boot in progress is the live story: let the band grow, the GPU cards adapt */
 body.fit .models-grid:has(.model-card.loading){max-height:clamp(200px,50vh,640px)}
 body.fit .models-grid.ready:empty{display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:var(--radius)}
 body.fit .models-grid.ready:empty::before{content:"no model weights resident";font-family:var(--mono);font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:var(--faint)}
-/* compact model card: identity + meta line left, live stats + spark right, load progress spans */
-body.fit .model-card{flex:1 1 440px;max-width:1300px;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,120px);grid-template-areas:"head stats spark" "meta stats spark" "prog prog prog";
-  column-gap:14px;row-gap:5px;padding:9px 14px 9px 16px;align-items:center}
+/* Model identity and description use the full card width; telemetry stays below. */
+body.fit .model-card{flex:1 1 440px;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,120px);grid-template-areas:"head head" "meta meta" "blurb blurb" "weights weights" "stats spark" "prog prog";
+  column-gap:14px;row-gap:7px;padding:12px 16px;align-items:center}
 body.fit .model-card:hover{transform:none}
 body.fit .model-card .head{grid-area:head;align-items:center}
-body.fit .model-card .head-right{flex-direction:row;align-items:center;gap:8px;max-width:none}
+body.fit .model-card .head-right{flex-direction:row;align-items:center;gap:8px;max-width:40%}
 body.fit .model-card .crest{width:30px;height:30px;font-size:15px}
-body.fit .model-card .name{font-size:14px}
-body.fit .model-card .blurb{display:none}
-body.fit .model-card .meta{grid-area:meta;display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;white-space:nowrap;height:20px}
+body.fit .model-card .name{font-size:15px}
+body.fit .model-card .blurb{grid-area:blurb;margin:2px 0;font-size:12px;line-height:1.55}
+body.fit .model-card .weight-source{grid-area:weights;margin:0;padding-top:6px}
+body.fit .model-card .meta{grid-area:meta;display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}
 body.fit .model-card .role{margin:0;flex:none}
-body.fit .model-card .served{margin:0;flex:none;flex-wrap:nowrap;gap:4px;font-size:9.5px}
+body.fit .model-card .served{margin:0;flex:1 1 auto;flex-wrap:wrap;gap:4px;font-size:9.5px;overflow-wrap:anywhere}
 body.fit .model-card .served .tag{padding:1px 6px}
-body.fit .model-card .specs{display:flex;gap:4px;margin:0;flex:1 1 auto;min-width:0;overflow:hidden;mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}
-body.fit .model-card .spec{flex:none;display:inline-flex;align-items:baseline;gap:.45em;padding:1px 7px;border-radius:999px}
-body.fit .model-card .spec .v{font-size:10px}
+body.fit .model-card .specs{display:flex;flex-wrap:wrap;gap:4px;margin:0;flex:1 1 100%;min-width:0}
+body.fit .model-card .spec{flex:0 1 auto;max-width:100%;display:inline-flex;align-items:baseline;gap:.45em;padding:2px 7px;border-radius:999px}
+body.fit .model-card .spec .v{font-size:10px;white-space:normal;overflow-wrap:anywhere}
 body.fit .model-card .spec .l{margin:0;font-size:8px}
 body.fit .model-card .spec::after{display:none}
-body.fit .model-card .stats{grid-area:stats;display:grid;grid-template-columns:repeat(6,auto);gap:0 12px;align-self:center}
-body.fit .model-card .stat{text-align:right}
+body.fit .model-card .stats{grid-area:stats;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0 12px;align-self:center}
+body.fit .model-card .stat{text-align:left}
 body.fit .model-card .stat .v{font-size:14px}
 body.fit .model-card .spark{grid-area:spark;margin:0;height:34px;width:100%;align-self:center}
 body.fit .model-card .loadprog{grid-area:prog;margin:2px 0 0;padding:7px 10px}
@@ -612,11 +649,11 @@ body.fit .model-card .lp-log{margin-top:5px;padding-top:4px}
 body.fit .model-card .lp-log .ln:nth-child(-n+3){display:none}
 body.fit .model-card .accent-bar{width:3px}
 @media(max-width:1100px){
-  body.fit .model-card{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"head stats" "meta stats" "prog prog"}
+  body.fit .model-card{grid-template-columns:minmax(0,1fr);grid-template-areas:"head" "meta" "blurb" "weights" "stats" "prog"}
   body.fit .model-card .spark{display:none}
   /* narrow tiles: stack the two cluster charts so their titles stay whole */
   body.fit .deck{grid-template-columns:minmax(0,1fr) minmax(0,clamp(210px,25vw,300px))}
-  body.fit .global-charts{grid-template-columns:1fr;grid-template-rows:1fr 1fr;min-height:150px;max-height:clamp(150px,26vh,260px)}
+  body.fit .global-charts{grid-template-columns:1fr;grid-template-rows:1fr 1fr;min-height:150px}
 }
 /* GPU grid: fills the remaining height; column count follows the tile's shape */
 body.fit .gpu-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:10px;min-height:0}
@@ -691,12 +728,20 @@ body.fit #ev-feed{bottom:max(14px,env(safe-area-inset-bottom))}
       </div>
     </div>
     <div class="kpis" id="kpis">
-      <div class="kpi c-accent"><div class="lbl" data-unit="tok/s">Total</div><div class="val" id="kpi-tps">0<span class="unit">tok/s</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div></div>
-      <div class="kpi c-info"><div class="lbl" data-unit="tok/s">Output</div><div class="val" id="kpi-out">0<span class="unit">tok/s</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div></div>
-      <div class="kpi c-accent2"><div class="lbl" data-unit="tok/s">Input</div><div class="val" id="kpi-in">0<span class="unit">tok/s</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div></div>
-      <div class="kpi c-warn"><div class="lbl" data-unit="%">GPU Util</div><div class="val" id="kpi-util">0<span class="unit">%</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div></div>
-      <div class="kpi c-crit"><div class="lbl" data-unit="W">Power</div><div class="val" id="kpi-pwr">0<span class="unit">W</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div></div>
-      <div class="kpi c-good"><div class="lbl" data-unit="kWh">Today</div><div class="val" id="kpi-kwh">0<span class="unit">kWh</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div></div>
+      <div class="kpi c-accent"><div class="lbl" data-unit="tok/s">Total</div><div class="val" id="kpi-tps">0<span class="unit">tok/s</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div>
+        <div class="lavg" id="lavg-tps" title="Load average — exponential moving averages over 1 / 5 / 15 minutes (uptime semantics)"><span><s>1m</s><b>—</b></span><span><s>5m</s><b>—</b></span><span><s>15m</s><b>—</b></span><em>–</em></div></div>
+      <div class="kpi c-info"><div class="lbl" data-unit="tok/s">Output</div><div class="val" id="kpi-out">0<span class="unit">tok/s</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div>
+        <div class="foot" id="foot-out">—</div></div>
+      <div class="kpi c-accent2"><div class="lbl" data-unit="tok/s">Input</div><div class="val" id="kpi-in">0<span class="unit">tok/s</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div>
+        <div class="foot" id="foot-in">—</div></div>
+      <div class="kpi c-warn"><div class="lbl" data-unit="%">GPU Util</div><div class="val" id="kpi-util">0<span class="unit">%</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div>
+        <div class="lavg" id="lavg-util" title="Load average — exponential moving averages over 1 / 5 / 15 minutes (uptime semantics)"><span><s>1m</s><b>—</b></span><span><s>5m</s><b>—</b></span><span><s>15m</s><b>—</b></span><em>–</em></div></div>
+      <div class="kpi c-crit"><div class="lbl" data-unit="W">Power</div><div class="val" id="kpi-pwr">0<span class="unit">W</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div>
+        <div class="lavg" id="lavg-pwr" title="Load average — exponential moving averages over 1 / 5 / 15 minutes (uptime semantics)"><span><s>1m</s><b>—</b></span><span><s>5m</s><b>—</b></span><span><s>15m</s><b>—</b></span><em>–</em></div></div>
+      <div class="kpi c-good"><div class="lbl" data-unit="kWh">Today</div><div class="val" id="kpi-kwh">0<span class="unit">kWh</span></div><div class="val sz" aria-hidden="true">888.8<span class="unit">tok/s</span></div>
+        <div class="foot" id="foot-kwh">—</div></div>
+      <div class="kpi money"><div class="lbl" data-unit="₽">Cost · today</div><div class="val" id="kpi-cost">₽0<span class="unit">day</span></div><div class="val sz" aria-hidden="true">₽8 888<span class="unit">day</span></div>
+        <div class="foot" id="foot-cost">—</div></div>
     </div>
     <div class="hdr-btns">
       <button class="btn icon" id="btn-fs" title="fullscreen (F)" aria-label="toggle fullscreen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg></button>
@@ -739,9 +784,9 @@ body.fit #ev-feed{bottom:max(14px,env(safe-area-inset-bottom))}
   <div class="tm-list"></div>
 </div>
 
-<script src="/static/themes/runner.js?v=20261031b"></script>
+<script src="/static/themes/runner.js?v=20261104c"></script>
 <script>
-const ASSET_VER = '20261031b';
+const ASSET_VER = '20261104c';
 const $ = (id) => document.getElementById(id);
 const setHTML = (el, html) => {
   if (el.__nvtopHTML !== html){ el.innerHTML = html; el.__nvtopHTML = html; }
@@ -780,7 +825,7 @@ const fmtCtx = (n) => n >= 1048576 ? (n/1048576).toFixed(n % 1048576 ? 1 : 0) + 
   : n >= 1024 ? Math.round(n/1024) + 'k' : String(n);
 
 /* ════════ THEME ENGINE ════════ */
-const THEME_ORDER = ['oblivion','ares','k2049','muthur','jarvis','nightcity','arrakis','lumon','apex','construct','gargantua','thegrid','tokyo'];
+const THEME_ORDER = ['liquidglass','chrome','thermalscan','ditherpunk','oblivion','ares','k2049','muthur','jarvis','nightcity','arrakis','lumon','apex','construct','gargantua','thegrid','tokyo'];
 const DEFAULT_THEME = 'jarvis';
 const hexRgb = (h) => [0,2,4].map(i=>parseInt(h.replace('#','').slice(i,i+2),16)).join(',');
 
@@ -805,15 +850,27 @@ function applyTheme(t){
   t = t || {};
   const rs = document.documentElement.style;
   const set = (k,v) => v && rs.setProperty(k, v);
-  UI.accent = t.accent || '#57c8ff';
-  UI.accent2 = t.accent2 || '#ffc96b';
-  UI.info = t.info || UI.accent;
-  UI.good = t.good || '#48f5a7';
-  UI.warn = t.warn || '#ffb84d';
-  UI.crit = t.crit || '#ff4d68';
-  UI.text = t.text || '#e8f2fa';
-  UI.muted = t.muted || '#8a99a8';
   UI.light = !!t.light;
+  /* Stage colour = what text actually sits on: the panel plate composited over
+     the theme's void. Light themes get shader lift folded in. Ink that misses
+     its contrast target is nudged toward white/black, leaving hue intact. */
+  const voidRgb = hexToRgb(t.void || '#030811') || [3, 8, 17];
+  const panelArr = parseRgba(t.panel || 'rgba(8,16,30,.55)') || [8, 16, 30, 0.55];
+  const alphaFloor = UI.light ? 0.74 : 0.60;
+  const panelAlpha = Math.min(1, Math.max(panelArr[3], alphaFloor));
+  const panelRgb = [panelArr[0], panelArr[1], panelArr[2], panelAlpha];
+  let stage = compOver(panelRgb, voidRgb);
+  stage = UI.light ? stage.map(v => v * 0.68 + 255 * 0.32)
+                   : stage.map((v, i) => v * 0.86 + voidRgb[i] * 0.14);
+  const ink = (col, target, fallback) => liftTo(col || fallback, stage, target);
+  UI.accent = ink(t.accent, 3.9, '#57c8ff');
+  UI.accent2 = ink(t.accent2, 3.6, '#ffc96b');
+  UI.info = ink(t.info || t.accent, 3.7, UI.accent);
+  UI.good = ink(t.good, 3.6, '#48f5a7');
+  UI.warn = ink(t.warn, 3.6, '#ffb84d');
+  UI.crit = ink(t.crit, 3.6, '#ff4d68');
+  UI.text = ink(t.text, 7.2, '#e8f2fa');
+  UI.muted = ink(t.muted, UI.light ? 5.6 : 5.0, '#8a99a8');
   set('--accent', UI.accent);          set('--accent-rgb', hexRgb(UI.accent));
   set('--accent2', UI.accent2);        set('--accent2-rgb', hexRgb(UI.accent2));
   set('--info', UI.info);              set('--info-rgb', hexRgb(UI.info));
@@ -822,13 +879,17 @@ function applyTheme(t){
   set('--crit', UI.crit);              set('--crit-rgb', hexRgb(UI.crit));
   set('--text', UI.text);
   set('--muted', UI.muted);
-  set('--faint', t.faint || '#51606e');
+  set('--faint', ink(t.faint, UI.light ? 4.2 : 3.5, '#51606e'));
   set('--void', t.void || '#030811');
-  set('--panel', t.panel || 'rgba(8,16,30,.55)');
+  set('--panel', `rgba(${Math.round(panelRgb[0])},${Math.round(panelRgb[1])},${Math.round(panelRgb[2])},${panelAlpha.toFixed(2)})`);
   set('--line', t.line || 'rgba(255,255,255,.08)');
   rs.setProperty('--line-strong', t.line ? t.line.replace(/[\d.]+\)$/, m => Math.min(1, parseFloat(m)*2.2) + ')') : 'rgba(255,255,255,.18)');
   set('--radius', t.radius || '16px');
-  rs.setProperty('--glow', UI.light ? '0.25' : '1');
+  /* Per-theme exposure: stop the stage from outshining the instrumentation.
+     Themes may declare `dim` (and `sat`) themselves; sane defaults otherwise. */
+  rs.setProperty('--wp-dim', String(typeof t.dim === 'number' ? t.dim : (UI.light ? 0.93 : 0.85)));
+  if (typeof t.sat === 'number') rs.setProperty('--wp-sat', String(t.sat)); else rs.removeProperty('--wp-sat');
+  rs.setProperty('--glow', UI.light ? '0.22' : '0.5');
   loadGoogleFonts(t.googleFonts);
   const fonts = t.fonts || {};
   set('--font-display', fonts.display);
@@ -857,7 +918,7 @@ const Engine = (() => {
     s.classList.remove('go'); void s.offsetWidth; s.classList.add('go');
   }
 
-  function show(id, silent){
+  function show(id, silent, remember){
     const th = (window.NVTHEMES||{})[id];
     if (!th || !window.WallpaperRunner) return false;
     if (id === currentId) return true;
@@ -875,7 +936,7 @@ const Engine = (() => {
     const fadeIdx = active, fading = layerRunners[active];
     setTimeout(() => { if (fading && layerRunners[fadeIdx] === fading && fadeIdx !== active) fading.stop(); }, 1300);
     active = nextIdx; currentId = id;
-    try { localStorage.setItem('nvtop-theme', id); } catch(e){}
+    if (remember !== false){ try { localStorage.setItem('nvtop-theme', id); } catch(e){} }
     applyTheme(th.theme);
     $('btn-theme-name').textContent = th.name;
     $('ft-theme').textContent = th.name;
@@ -916,13 +977,26 @@ const Engine = (() => {
     const i = (list.indexOf(currentId) + (dir||1) + list.length) % list.length;
     show(list[i]);
   }
-  function init(){
+  let bootTries = 0;
+  function init(prefer){
     const list = available();
+    let saved = prefer || null;
+    if (!saved){ try { saved = localStorage.getItem('nvtop-theme'); } catch(e){} }
+    /* Cold start race: the saved theme script may not have registered yet.
+       Waiting for it (instead of falling through to DEFAULT) prevents the
+       fallback from overwriting the stored choice. Capped so a genuinely
+       broken shader can't wedge the boot. */
+    if (saved && THEME_ORDER.includes(saved) && !list.includes(saved) && bootTries++ < 60){
+      loadTheme(saved, () => {}, 'high');
+      setTimeout(() => init(saved), 120);
+      return;
+    }
     if (!list.length) return;
-    let saved = null;
-    try { saved = localStorage.getItem('nvtop-theme'); } catch(e){}
     const fallback = list.includes(DEFAULT_THEME) ? DEFAULT_THEME : list[0];
-    show(list.includes(saved) ? saved : fallback, true);
+    const chosen = list.includes(saved) ? saved : fallback;
+    /* Never let a slow/failed theme script overwrite the operator's stored
+       choice: only an actual selection is persisted. */
+    show(chosen, true, chosen === saved);
     $('btn-theme-name').textContent = (window.NVTHEMES[currentId]||{}).name || 'THEME';
   }
   function pulse(v){ const r = runner(); if (r) r.pulse(v); }
@@ -1030,7 +1104,7 @@ function loadTheme(id, done, priority){
     if (THEME_ORDER.includes(saved)) selected = saved;
   } catch(e){}
   loadTheme(selected, () => {
-    Engine.init();
+    Engine.init(selected);
     const loadRest = () => {
       let pending = THEME_ORDER.length - 1;
       if (!pending){ Engine.refresh(); return; }
@@ -1474,6 +1548,7 @@ function modelCardTemplate(m){
       </div>
     </div>
     <div class="blurb" data-role="blurb" hidden></div>
+    <div class="weight-source" data-role="weights" hidden></div>
     <div class="meta">
     <div class="role" data-role="role">${m.endpoint} · GPUs ${m.gpu_indices.join(',')||'—'}</div>
     <div class="served" data-role="served"></div>
@@ -1489,6 +1564,17 @@ function modelCardTemplate(m){
     </div>
     <canvas class="spark" data-role="spark"></canvas>
   </div>`;
+}
+
+function updateWeightIdentity(card, intel){
+  const el = card.querySelector('[data-role="weights"]');
+  const rows = [
+    ['Weights', intel.weight_identity, intel.config_path || ''],
+    ['Package', intel.package, intel.path || ''],
+  ].filter(([, value]) => value);
+  el.hidden = !rows.length;
+  setHTML(el, rows.map(([label, value, path]) =>
+    `<div class="source-row"><span class="source-label">${label}</span><span class="source-value" title="${esc(path)}">${esc(value)}</span></div>`).join(''));
 }
 
 const modelSparks = new Map();
@@ -1517,6 +1603,7 @@ function updateModelCard(card, m){
     setHTML(blurb, (it.blurb ? esc(it.blurb) : '') +
       (it.summary ? `<span class="src" title="${esc(it.summary)}">${esc(it.summary)}</span>` : ''));
   }
+  updateWeightIdentity(card, it);
 
   /* live stats */
   Q('[data-role="total"]').textContent = fmt(m.total_tps,1);
@@ -1533,7 +1620,7 @@ function updateModelCard(card, m){
 
   /* spec sheet */
   const cells = [];
-  const C = (v, l, live) => { if (v) cells.push(`<div class="spec${live?' live':''}"><div class="v">${v}</div><div class="l">${l}</div></div>`); };
+  const C = (v, l, live) => { if (v) cells.push(`<div class="spec${live?' live':''}${l==='variant'?' variant':''}"><div class="v">${v}</div><div class="l">${l}</div></div>`); };
   /* serving quality first: these are what "how well is it running" means */
   const msf = (x) => x == null ? null : x >= 1000 ? (x/1000).toFixed(2) + 's' : x.toFixed(0) + 'ms';
   if (m.ttft_p50_ms != null) C(`${msf(m.ttft_p50_ms)} <span style="color:var(--muted);font-weight:500">/ ${msf(m.ttft_p95_ms)}</span>`, 'ttft p50 / p95', true);
@@ -1543,13 +1630,15 @@ function updateModelCard(card, m){
   if (m.prefix_hit_pct != null) C(m.prefix_hit_pct.toFixed(0) + '%', 'prefix cache hit', true);
   if (m.preemptions_delta) C(String(Math.round(m.preemptions_delta)), 'preemptions', true);
   if (m.boot_last && m.boot_last.total_s) C(`${Math.round(m.boot_last.total_s/60)}m${String(Math.round(m.boot_last.total_s%60)).padStart(2,'0')}`, 'last boot', true);
+  C(it.variant && esc(it.variant), 'variant');
+  C(it.checkpoint && esc(it.checkpoint), 'checkpoint');
   C(it.params && `<b>${esc(it.params)}</b>`, 'params');
   if (it.moe) C(`${it.moe.experts}E·${it.moe.active ?? '?'}${it.moe.shared ? `+${it.moe.shared}` : ''}`, 'experts');
   if (it.ctx_serving) C(fmtCtx(it.ctx_serving) + (it.ctx_native && it.ctx_native !== it.ctx_serving
     ? ` <span style="color:var(--muted);font-weight:500">/ ${fmtCtx(it.ctx_native)}</span>` : ''), 'context');
   C(it.quant && esc(it.quant), it.dtype ? esc(it.dtype).replace('float','f') + ' base' : 'quant');
   if (it.layers && it.hidden) C(`${it.layers}L·${it.hidden}`, `${it.heads || '?'}H${it.attn ? ' · ' + esc(it.attn) : ''}`);
-  if (it.weights_gb) C(`${it.weights_gb >= 100 ? Math.round(it.weights_gb) : it.weights_gb} GB`, 'on disk');
+  if (it.weights_gb) C(`${it.weights_gb >= 100 ? Math.round(it.weights_gb) : it.weights_gb} GB`, it.config_path ? 'source weights' : 'on disk');
   if (it.vram_mib) C(fmtBytesMib(it.vram_mib), `vram${it.tp ? ' · tp' + it.tp : ''}`, true);
   else if (it.tp) C(`TP${it.tp}`, 'parallelism');
   if (it.uptime_s != null) C(fmtSecs(it.uptime_s), 'uptime', true);
@@ -1601,6 +1690,7 @@ function sniffedCardTemplate(s){
       <div class="lp-log" data-role="lp-log"></div>
     </div>
     <div class="blurb" data-role="blurb" hidden></div>
+    <div class="weight-source" data-role="weights" hidden></div>
     <div class="meta">
     <div class="role" data-role="role"></div>
     <div class="served" data-role="served" hidden></div>
@@ -1753,11 +1843,14 @@ function updateSniffedCard(card, s){
     setHTML(blurb, (it.blurb ? esc(it.blurb) : '') +
       (it.summary ? `<span class="src" title="${esc(it.summary)}">${esc(it.summary)}</span>` : ''));
   }
+  updateWeightIdentity(card, it);
   const served = Q('[data-role="served"]');
   served.hidden = !(s.served_names && s.served_names.length);
   if (!served.hidden) setHTML(served, s.served_names.map(n => `<span class="tag">${esc(n)}</span>`).join(''));
   const cells = [];
-  const C = (v, l, live) => { if (v) cells.push(`<div class="spec${live?' live':''}"><div class="v">${v}</div><div class="l">${l}</div></div>`); };
+  const C = (v, l, live) => { if (v) cells.push(`<div class="spec${live?' live':''}${l==='variant'?' variant':''}"><div class="v">${v}</div><div class="l">${l}</div></div>`); };
+  C(it.variant && esc(it.variant), 'variant');
+  C(it.checkpoint && esc(it.checkpoint), 'checkpoint');
   C(it.params && `<b>${esc(it.params)}</b>`, 'params');
   if (it.moe) C(`${it.moe.experts}E·${it.moe.active ?? '?'}${it.moe.shared ? `+${it.moe.shared}` : ''}`, 'experts');
   if (it.ctx_native) C(fmtCtx(it.ctx_native), 'context');
@@ -1802,6 +1895,64 @@ function renderModels(snap){
 }
 
 const _kpiPrev = {};
+/* ── colour maths for automatic legibility ─────────────────────────────
+   Palettes are authored per theme, but a shader-lit panel is not a constant
+   backdrop. Composite the real panel-over-stage colour, then lift any ink
+   that misses its WCAG-style target by blending toward black or white —
+   cheapest fix that survives every future theme, light ones included. */
+const hexToRgb = (h) => {
+  const s = String(h || '').trim();
+  if (/^#[0-9a-f]{3}$/i.test(s)) return [1, 2, 3].map(i => parseInt(s[i] + s[i], 16));
+  if (/^#[0-9a-f]{6}$/i.test(s)) return [0, 2, 4].map(i => parseInt(s.slice(1 + i, 3 + i), 16));
+  return null;
+};
+const rgbToHex = (a) => '#' + a.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+const chanLin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+const relLum = (rgb) => 0.2126 * chanLin(rgb[0]) + 0.7152 * chanLin(rgb[1]) + 0.0722 * chanLin(rgb[2]);
+const ratio = (a, b) => { const l1 = relLum(a), l2 = relLum(b); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); };
+const parseRgba = (s) => {
+  const h = hexToRgb(s);
+  if (h) return [h[0], h[1], h[2], 1];
+  const m = String(s || '').match(/([\d.]+)[ ,\/]+([\d.]+)[ ,\/]+([\d.]+)(?:[ ,\/]+([\d.]+))?/);
+  return m ? [+m[1], +m[2], +m[3], m[4] == null ? 1 : +m[4]] : null;
+};
+const compOver = (fg, bg) => [0, 1, 2].map(i => fg[i] * fg[3] + bg[i] * (1 - fg[3]));
+function liftTo(ink, bg, target){
+  const rgb = hexToRgb(ink);
+  if (!rgb) return ink;
+  if (ratio(rgb, bg) >= target) return ink;
+  const lighten = relLum(bg) < 0.32;
+  for (let t = 0.03; t <= 1.0001; t += 0.03){
+    const cand = rgb.map(v => lighten ? v + (255 - v) * t : v * (1 - t));
+    if (ratio(cand, bg) >= target) return rgbToHex(cand);
+  }
+  return lighten ? '#ffffff' : '#000000';
+}
+
+function setLavg(id, arr, fmtFn){
+  const el = $(id);
+  if (!el) return;
+  const nums = el.querySelectorAll('b');
+  const trend = el.querySelector('em');
+  if (!Array.isArray(arr) || arr.length !== 3 ||!nums.length){
+    if (nums.length === 3) nums.forEach(b => { b.textContent = '—'; });
+    if (trend){ trend.className = ''; trend.textContent = '–'; }
+    return;
+  }
+  for (let i = 0; i < 3; i++){
+    const txt = fmtFn(arr[i]);
+    if (nums[i].textContent !== txt) nums[i].textContent = txt;
+  }
+  if (trend){
+    const base = Math.max(arr[2], 1e-6);
+    const d = (arr[0] - arr[2]) / base;
+    const cls = d > 0.04 ? 'up' : d < -0.06 ? 'down' : '';
+    const glyph = cls === 'up' ? '▲' : cls === 'down' ? '▼' : '–';
+    if (trend.textContent !== glyph) trend.textContent = glyph;
+    if (trend.className !== cls) trend.className = cls;
+  }
+}
+
 function setKpi(id, html, key, val){
   const el = $(id);
   setHTML(el, html);
@@ -1834,6 +1985,40 @@ function renderHeader(snap){
   setKpi('kpi-pwr', `${t.power_draw_w.toFixed(0)}<span class="unit">W</span>`, 'pwr', t.power_draw_w);
   const kwh = t.energy_today_kwh || 0;
   setKpi('kpi-kwh', `${kwh >= 100 ? kwh.toFixed(0) : kwh.toFixed(kwh >= 10 ? 1 : 2)}<span class="unit">kWh</span>`, 'kwh', kwh);
+
+  /* ── load averages (uptime semantics) for the three headline instruments ── */
+  const lav = t.lavg || {};
+  setLavg('lavg-tps', lav.tps, v => v >= 100 ? fmt(v, 0) : v.toFixed(v >= 10 ? 1 : 0));
+  setLavg('lavg-util', lav.util, v => String(Math.round(v)));
+  setLavg('lavg-pwr', lav.power, v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(Math.round(v)));
+
+  /* ── footnotes: the single derived number each remaining tile earns ── */
+  const setFoot = (id, html) => { const el = $(id); if (el) setHTML(el, html); };
+  const outShare = t.total_tps > 0 ? (t.output_tps / t.total_tps) * 100 : 0;
+  setFoot('foot-out', `<b>${outShare.toFixed(0)}%</b> of throughput`);
+  const ioRatio = t.output_tps > 1 ? t.input_tps / t.output_tps : 0;
+  setFoot('foot-in', `<b>${ioRatio ? ioRatio.toFixed(1) : '—'}:1</b> in : out`);
+  const mskHours = ((Date.now() / 3600000) + 3) % 24;         // Moscow = UTC+3, no DST
+  setFoot('foot-kwh', `<b>${(kwh / Math.max(mskHours, 0.25)).toFixed(1)} kW</b> avg · day`);
+  const cost = t.cost || {};
+  const sym = cost.symbol || '₽';
+  const rub = Number(cost.rub_today || 0);
+  const rubTxt = rub >= 1e4 ? (rub / 1000).toFixed(1) + 'k'
+    : rub >= 100 ? Math.round(rub).toLocaleString('ru-RU')
+    : rub.toFixed(rub >= 10 ? 0 : 1);
+  setKpi('kpi-cost', `${sym}${rubTxt}<span class="unit">day</span>`, 'cost', rub);
+  const rateTxt = Number(cost.rate_rub || 0).toFixed(2);
+  setFoot('foot-cost', `<b>${sym}${fmt(cost.rub_hour, 1)}/h</b> · ${rateTxt}${sym.charAt(0)}` + (cost.approximate ? ' †' : ''));
+  const box = $('kpi-cost').closest('.kpi');
+  if (box && cost.rates && cost.rates.length === 3){
+    box.title = `Electricity · ${cost.place || ''} · ${cost.category || ''} · ${cost.period || ''}\n`
+      + `marginal ${rateTxt} ${sym}/kWh · bands ≤${(cost.band_limits[0]).toFixed(0)} kWh @ ${cost.rates[0].toFixed(2)}, `
+      + `≤${(cost.band_limits[1]).toFixed(0)} @ ${cost.rates[1].toFixed(2)}, above @ ${cost.rates[2].toFixed(2)}\n`
+      + `today ${sym}${Number(cost.rub_today || 0).toFixed(0)} · ${Number(cost.kwh_today || 0).toFixed(1)} kWh`
+      + ` · month ${sym}${Number(cost.rub_month || 0).toFixed(0)} (${Number(cost.kwh_month || 0).toFixed(0)} kWh)`
+      + ` · projection ${sym}${Number(cost.rub_month_projected || 0).toFixed(0)}`
+      + (cost.approximate ? '\n† kWh from before cost tracking priced at the entry band' : '');
+  }
 }
 
 /* ════════ HERO: total throughput — tweened odometer, load glow, token stream ════════ */

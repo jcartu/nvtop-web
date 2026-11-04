@@ -30,7 +30,7 @@
 
 `nvtop-web` is a FastAPI service and a single HTML file. The service polls NVML at 4 Hz, scrapes the engine's Prometheus endpoint, and tails the engine boot log. Everything is pushed to the browser over one Server-Sent Events stream. The browser renders gauges and ribbons on Canvas2D and a shader wallpaper on WebGL. There is no bundler, no framework, no `node_modules`.
 
-It is built for the machines people actually run inference on: 4×/8× RTX PRO 6000, Blackwell, H100, A100, and 4090 workstations serving vLLM, SGLang, or Ollama.
+It is built for the machines people actually run inference on: 4×/8× RTX PRO 6000, Blackwell, H100, A100, and 4090 workstations serving Flare, vLLM, SGLang, or Ollama.
 
 | Layer | What you see | Source |
 |:--|:--|:--|
@@ -38,6 +38,26 @@ It is built for the machines people actually run inference on: 4×/8× RTX PRO 6
 | **Serving** | TTFT p50/p95, ITL p50/p95, prefix-cache hit rate, KV-cache occupancy, request queue depth, live token throughput | Prometheus `/metrics` |
 | **Boot** | Weight loading, CUDA graph capture, warmup, structured progress bars with learned ETA | Engine stdout |
 | **Surface** | Container-query layout, 13 WebGL shader wallpapers, adaptive GPU throttling | Single HTML file |
+
+### Model identity
+
+The model card separates the **serving alias** from the **loaded weight identity**. Flare's
+`/v1/models` root identifies the checkpoint even when the server advertises a generic alias;
+the running process identifies the compiled package. Config/model-card metadata comes from an
+exact local checkpoint match under `NVTOP_MODEL_ROOTS` (colon-separated roots; default
+`/mnt/2king/models`). Ambiguous aliases and missing explicit checkpoints do not borrow metadata
+from another installed variant.
+
+DeepSeek V4.1 Flash descriptions distinguish the original and 1017 checkpoints, stock and
+WARMIND/abliterated derivatives, native mixed FP8/FP4, lossless CSF, and NVIDIA NVFP4. The card
+also shows available architecture, expert routing, serving context, GPU parallelism, and MTP
+drafting facts. Unknown variants retain their exact identity rather than being silently relabelled.
+Packed quantized tensors and Flare payload bytes are not presented as logical parameter counts.
+
+Flare packages can reside outside the source checkpoint roots. The **Weights** row names the API
+root, **Package** names the active compiled package, and their tooltips show the metadata/runtime
+paths. A footprint labelled **source weights** belongs to the source checkpoint, not the compiled
+package. New provenance fields respect `NVTOP_MASK_NAMES=1`.
 
 <br>
 
@@ -116,6 +136,11 @@ It is built for the machines people actually run inference on: 4×/8× RTX PRO 6
 
 The layout is driven entirely by CSS container queries. In `fit` mode the dashboard never scrolls; it reflows GPU cards, ribbons, and the serving panel into whatever viewport it is given.
 
+Model descriptions remain visible in both layouts. The card shows the model title, serving engine,
+variant/specification chips, full descriptive text, and separate weight/package identities. Long
+names wrap on narrow screens. On short fit-mode windows, the model band scrolls independently
+so the GPU cards remain on screen.
+
 <table>
   <tr>
     <td width="50%" align="center" valign="top">
@@ -139,18 +164,24 @@ The layout is driven entirely by CSS container queries. In `fit` mode the dashbo
 
 <table>
   <tr>
+    <td align="center"><a href="docs/media/theme-liquidglass.png"><img src="docs/media/theme-liquidglass.png" alt="Liquid Glass" width="100%"></a><br><sub>Liquid Glass</sub></td>
+    <td align="center"><a href="docs/media/theme-chrome.png"><img src="docs/media/theme-chrome.png" alt="Liquid Chrome" width="100%"></a><br><sub>Liquid Chrome</sub></td>
+    <td align="center"><a href="docs/media/theme-thermalscan.png"><img src="docs/media/theme-thermalscan.png" alt="Thermal Scan" width="100%"></a><br><sub>Thermal Scan</sub></td>
+    <td align="center"><a href="docs/media/theme-ditherpunk.png"><img src="docs/media/theme-ditherpunk.png" alt="Ditherpunk" width="100%"></a><br><sub>Ditherpunk</sub></td>
+  </tr>
+  <tr>
     <td align="center"><a href="docs/media/theme-nightcity.png"><img src="docs/media/theme-nightcity.png" alt="Night City" width="100%"></a><br><sub>Night City</sub></td>
     <td align="center"><a href="docs/media/theme-oblivion.png"><img src="docs/media/theme-oblivion.png" alt="Oblivion" width="100%"></a><br><sub>Oblivion</sub></td>
     <td align="center"><a href="docs/media/theme-arrakis.png"><img src="docs/media/theme-arrakis.png" alt="Arrakis" width="100%"></a><br><sub>Arrakis</sub></td>
+    <td align="center"><a href="docs/media/theme-thegrid.png"><img src="docs/media/theme-thegrid.png" alt="The Grid" width="100%"></a><br><sub>The Grid</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/media/theme-thegrid.png"><img src="docs/media/theme-thegrid.png" alt="The Grid" width="100%"></a><br><sub>The Grid</sub></td>
     <td align="center"><a href="docs/media/theme-tokyo.png"><img src="docs/media/theme-tokyo.png" alt="Tokyo" width="100%"></a><br><sub>Tokyo</sub></td>
     <td align="center"><a href="docs/media/theme-lumon.png"><img src="docs/media/theme-lumon.png" alt="Lumon" width="100%"></a><br><sub>Lumon</sub></td>
   </tr>
 </table>
 
-<p align="center"><sub>Plus MUTHUR, Jarvis, and five more. Full 4K capture: <a href="docs/media/dashboard.png">dashboard.png</a></sub></p>
+<p align="center"><sub>Plus Jarvis, MUTHUR, Ares, 2049, Apex, Construct, and Gargantua — 17 themes, all pure fragment shaders. Full 4K capture: <a href="docs/media/dashboard.png">dashboard.png</a></sub></p>
 
 <br>
 
@@ -330,6 +361,7 @@ Sessions are signed with an HMAC secret stored in `.session-secret` (30-day `Htt
 |:--|:--:|:--:|:--|
 | vLLM | ✓ | ✓ | TTFT, ITL, prefix cache, KV usage, queue, swapped |
 | SGLang | ✓ | ✓ | TTFT, ITL, radix cache hit rate, running/queued |
+| Flare | ✓ | — | Auto-discovered `flare run`; prompt/output TPS, completed requests, active/queued requests, KV-page occupancy; no fabricated latency metrics |
 | Ollama | ✓ | — | Token throughput and request counts |
 | Any Prometheus exporter | partial | — | Generic histogram and gauge mapping via `NVTOP_METRICS_MAP` |
 

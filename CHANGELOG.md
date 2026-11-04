@@ -2,6 +2,49 @@
 
 All notable changes to nvtop-web.
 
+## [Unreleased]
+
+### Load averages, energy cost, calmer instrumentation
+- 1/5/15 min load averages for total throughput, GPU utilisation, and cluster power, computed
+  server-side with uptime-style fixed-decay exponentials and seeded on first sample so a restarted
+  service starts at truth instead of climbing from zero. Each headline KPI carries the triplet with
+  a momentum caret; the other tiles gained a single derived footnote (output share, in:out ratio,
+  daily average draw, ₽/h burn).
+- Electricity cost: site tariff for a rural Moscow-region settlement (сельское население), 2026 II полугодие — 7.46 / 8.04 / 10.86 ₽/kWh across the 3900 / 6000 kWh monthly
+  bands. Editable `energy_tariff.json` (+ `NVTOP_ELECTRICITY_RATES` override), day and month
+  accumulators in Moscow time, marginal-band charging that prices a boundary-crossing tick at the
+  correct split rate, driver-counter-reset rebasing, and a month-to-date projection. Exposed as
+  `totals.cost` and rendered as a dedicated COST · TODAY bubble beside the kWh tile; kWh accrued
+  before the feature existed is priced at the entry band and flagged approximate.
+- Legibility pass aimed at eye strain: global glow halved, per-theme shader exposure (`theme.dim`)
+  and panel alpha floors, calmer KPI sheen and tighter numeral halos, taller panel blur, and an
+  automatic contrast lifter in the theme engine. The lifter composites the real panel-over-void
+  stage colour and nudges `text`/`muted`/`faint`/accents toward white or black until they meet
+  their contrast targets — so light themes like SKYTOWER and any future palette stay readable
+  without hand-tuning sixteen colour values per theme.
+- Four new first-class themes, each a single-file fragment shader, all validated at 0.03–0.16
+  centre luma: **LIQUID GLASS** (warped refractive slabs, caustic filaments, spectral rim
+  dispersion), **LIQUID CHROME** (endless mercury sea with studio softbox reflections and thin-film
+  fringing on the flanks), **THERMAL SCAN** (buoyant LWIR plumes, ironbow ramp, isotherm contours,
+  reticle furniture), **DITHERPUNK** (Bayer 4×4 ordered dither, interference rings, sparse acid
+  pixels, cleared centre). Registered in the dashboard and login theme orders and documented in the
+  gallery.
+
+
+### Model identity and Flare
+- Recognize Flare serving processes and discover their API ports even when socket descriptors are
+  unreadable; connect Flare token, request, queue, and KV-page counters to the existing dashboard.
+- Separate the serving alias, authoritative checkpoint root, compiled package, and source metadata.
+  Exact local matches take precedence; ambiguous or unavailable checkpoints do not inherit another
+  variant's metadata. Same-port model/engine switches invalidate cached identity and counter baselines.
+- Distinguish DeepSeek V4.1 Flash original/1017, stock/WARMIND-abliterated, native mixed FP8/FP4,
+  lossless CSF, and NVIDIA NVFP4. Read nested text configs and avoid counting opaque Flare payloads
+  or packed quantized tensors as logical parameters.
+- Show full descriptions in fit and scrolling layouts, with wrapping model names/specs and separate
+  weight/package provenance. The model band scrolls on short screens without pushing GPUs offscreen.
+- Add model-identity regression coverage and replace the UI's fixed engine allowlist with description
+  visibility/clipping checks. Preserve privacy-mode scrubbing of provenance fields.
+
 ## [2.2.0] — 2026-10-31
 
 ### Visual overhaul & showcase documentation

@@ -363,6 +363,9 @@ def parse_prom(text: str) -> list[dict[str, Any]]:
 # footprint, README model-card summary, engine + version, worker uptime and VRAM.
 
 MODEL_KB: list[tuple[re.Pattern, dict[str, str]]] = [(re.compile(p), d) for p, d in [
+    (r"deepseek[-_/ ]?v4(?:\.?1)?[-_/ ]?flash|ds4\.?1f|ds41f|warmind",
+     {"family": "DeepSeek", "creator": "DeepSeek AI", "origin": "Hangzhou · CN",
+      "blurb": "DeepSeek V4.1 Flash is a sparse-MoE, MLA-family long-context model spanning text and vision."}),
     (r"glm", {"family": "GLM", "creator": "Z.ai (Zhipu AI)", "origin": "Beijing · CN",
               "blurb": "Z.ai's flagship open-weight MoE reasoning line — GLM descends from Tsinghua's General Language Model research."}),
     (r"qwen|qwq|qvq", {"family": "Qwen", "creator": "Alibaba Cloud", "origin": "Hangzhou · CN",
@@ -458,17 +461,29 @@ def _pid_started(pid: int) -> float | None:
 _engine_cache: dict[str, dict[str, Any]] = {}
 
 
-def probe_engine(cfg: dict[str, Any], prefix: str) -> dict[str, Any]:
-    """Engine name/version + native model facts (vLLM /version, SGLang
-    /get_model_info + /get_server_info). Cached 10 min per endpoint once
-    identified; retried every 20 s while unknown."""
+def probe_engine(cfg: dict[str, Any], prefix: str, signature: str = "") -> dict[str, Any]:
+    """Engine name/version + native model facts.
+
+    The current API identity is part of the cache key: a new server or model
+    behind a reused port must not inherit the prior engine or model path.
+    """
     ep = cfg["endpoint"].rstrip("/")
     now = time.time()
+    cache_signature = f"{prefix}\0{signature}"
     hit = _engine_cache.get(ep)
-    if hit and now - hit["ts"] < (600 if hit["engine"] else 20):
+    if hit and hit.get("signature", "") == cache_signature \
+            and now - hit["ts"] < (600 if hit["engine"] else 20):
         return hit
-    info: dict[str, Any] = {"ts": now, "engine": "", "engine_version": "", "srv_model_path": "", "srv_ctx": None}
-    if prefix != "vllm":  # sglang, or unknown: cheap native probe
+    info: dict[str, Any] = {
+        "ts": now, "signature": cache_signature, "engine": "", "engine_version": "",
+        "srv_model_path": "", "srv_ctx": None,
+    }
+    # Flare exposes a vLLM-compatible /version response. Its native marker is
+    # the `flare` object in /v1/models and/or flare_* Prometheus metrics, both
+    # detected by scrape_endpoint before this compatibility probe.
+    if prefix == "flare":
+        info["engine"] = "Flare"
+    elif prefix != "vllm":  # SGLang, or unknown: cheap native probe
         code, body = http_get(ep + "/get_model_info", timeout=1.0)
         if code == 200:
             try:
@@ -497,7 +512,7 @@ def probe_engine(cfg: dict[str, Any], prefix: str) -> dict[str, Any]:
             except Exception:
                 pass
     if not info["engine"] and prefix:
-        info["engine"] = {"vllm": "vLLM", "sglang": "SGLang"}[prefix]
+        info["engine"] = {"vllm": "vLLM", "sglang": "SGLang", "flare": "Flare"}.get(prefix, "")
     _engine_cache[ep] = info
     return info
 
@@ -559,8 +574,11 @@ def _readme_intel(path: str) -> dict[str, Any]:
 
 
 def _safetensor_params(path: str) -> int:
-    """Exact tensor-element count from safetensors headers (8-byte length +
-    JSON header per shard — no weight data is read)."""
+    """Exact logical tensor-element count for ordinary safetensors shards.
+
+    Flare containers are byte archives represented as opaque U8 tensors; their
+    shapes are payload byte counts, never model parameter counts.
+    """
     total = 0
     try:
         for name in os.listdir(path):
@@ -571,6 +589,9 @@ def _safetensor_params(path: str) -> int:
                 if not 0 < hlen < 50_000_000:
                     return 0
                 hdr = json.loads(fh.read(hlen))
+            metadata = hdr.get("__metadata__") or {}
+            if str(metadata.get("format") or "").lower().startswith("flare"):
+                continue
             for k, v in hdr.items():
                 if k == "__metadata__" or not isinstance(v, dict):
                     continue
@@ -603,28 +624,51 @@ def disk_intel(path: str) -> dict[str, Any]:
             cfg = json.load(fh)
     except Exception:
         cfg = {}
-    arch = (cfg.get("architectures") or [""])[0]
+    text_cfg = cfg.get("text_config")
+    if not isinstance(text_cfg, dict):
+        text_cfg = {}
+
+    def cv(*names: str):
+        for source in (text_cfg, cfg):
+            for name in names:
+                value = source.get(name)
+                if value is not None:
+                    return value
+        return None
+
+    arch = (cfg.get("architectures") or text_cfg.get("architectures") or [""])[0]
     out["arch"] = re.sub(r"For(CausalLM|ConditionalGeneration)$", "", arch)
-    out["model_type"] = cfg.get("model_type") or ""
-    out["layers"] = cfg.get("num_hidden_layers")
-    out["hidden"] = cfg.get("hidden_size")
-    out["heads"] = cfg.get("num_attention_heads")
-    out["kv_heads"] = cfg.get("num_key_value_heads")
-    out["vocab"] = cfg.get("vocab_size")
-    out["ctx_native"] = cfg.get("max_position_embeddings")
-    out["dtype"] = str(cfg.get("dtype") or cfg.get("torch_dtype") or "")
-    out["attn"] = "MLA" if cfg.get("kv_lora_rank") else ""
-    experts = cfg.get("n_routed_experts") or cfg.get("num_local_experts") or cfg.get("num_experts")
+    out["model_type"] = cfg.get("model_type") or text_cfg.get("model_type") or ""
+    out["layers"] = cv("num_hidden_layers")
+    out["hidden"] = cv("hidden_size")
+    out["heads"] = cv("num_attention_heads")
+    out["kv_heads"] = cv("num_key_value_heads")
+    out["vocab"] = cv("vocab_size")
+    out["ctx_native"] = cv("max_position_embeddings")
+    out["dtype"] = str(cv("dtype", "torch_dtype") or "")
+    deepseek_mla = "deepseek" in str(out["model_type"]).lower() and text_cfg.get("q_lora_rank")
+    out["attn"] = "MLA" if cv("kv_lora_rank") or deepseek_mla else ""
+    experts = cv("n_routed_experts", "num_local_experts", "num_experts")
     if experts:
-        out["moe"] = {"experts": experts,
-                      "active": cfg.get("num_experts_per_tok") or cfg.get("moe_top_k"),
-                      "shared": cfg.get("n_shared_experts") or 0}
-    qc = cfg.get("quantization_config") or {}
-    quant = str(qc.get("quant_algo") or qc.get("quant_method") or "")
+        out["moe"] = {
+            "experts": experts,
+            "active": cv("num_experts_per_tok", "moe_top_k"),
+            "shared": cv("n_shared_experts") or 0,
+        }
+    qc = cfg.get("quantization_config") or text_cfg.get("quantization_config") or {}
+    if not isinstance(qc, dict):
+        qc = {}
+    quant_method = str(qc.get("quant_algo") or qc.get("quant_method") or "")
+    expert_dtype = str(qc.get("expert_dtype") or "")
     bits = qc.get("bits")
+    quant = quant_method
     if bits and quant:
         quant = f"{quant} {bits}-bit"
-    out["quant"] = quant.upper()[:24]
+    if expert_dtype and quant:
+        quant = f"{quant} + {expert_dtype} experts"
+    out["quant"] = quant.upper()[:32]
+    out["_quant_method"] = quant_method.lower()
+    out["_expert_dtype"] = expert_dtype.lower()
     total = 0
     try:
         with os.scandir(path) as it:
@@ -635,11 +679,12 @@ def disk_intel(path: str) -> dict[str, Any]:
         pass
     out["weights_gb"] = round(total / 1e9, 1) if total else None
     out.update(_readme_intel(path))
-    if not out.get("params"):
+    # Packed/quantized tensors encode bytes and scales rather than one logical
+    # element per parameter. Only surface a count stated by the model card.
+    if not out.get("params") and not quant_method:
         n = _safetensor_params(path)
         if n:
-            # packed quant tensors under-count logical params → flag approximate
-            out["params"] = ("~" if quant else "") + _fmt_params(n)
+            out["params"] = _fmt_params(n)
     _disk_cache[path] = out
     return out
 
@@ -659,55 +704,289 @@ def _int_flag(text: str, *flags: str) -> int | None:
         return None
 
 
-def _resolve_model_path(m: dict[str, Any], anc: str) -> str:
-    cands: list[str] = []
-    if m.get("srv_model_path"):
-        cands.append(m["srv_model_path"])
-    for meta in m.get("model_meta") or []:
-        if meta.get("root"):
-            cands.append(meta["root"])
-    for fl in ("--model-path", "--model_path", "--model"):
-        v = _flag(anc, fl)
-        if v:
-            cands.append(v)
-    cands += list(m.get("model_names") or [])
-    for c in cands:
-        if c.startswith("/") and os.path.isdir(c):
-            return c
-    # container paths (e.g. /model inside docker) don't exist on the host —
-    # fall back to fuzzy-matching the served name against local model dirs
-    for n in m.get("model_names") or []:
-        d = _match_local_dir(n)
-        if d:
-            return d
+_FLARE_RUN_RE = re.compile(
+    r"(?:^|\s)(?:[^\s\"']*/)?flare\s+run\s+(?P<package>\"[^\"]+\"|'[^']+'|\S+)",
+    re.I,
+)
+
+
+def _flare_run_package(cmd: str) -> str:
+    """Return Flare's positional PACKAGE argument, without inferring identity."""
+    for match in _FLARE_RUN_RE.finditer(cmd or ""):
+        package = match.group("package").strip().strip("'\"")
+        if package and not package.startswith("-") and "$" not in package:
+            return package
     return ""
 
 
+def _model_roots(m: dict[str, Any]) -> list[str]:
+    return [
+        str(meta.get("root") or "")
+        for meta in m.get("model_meta") or []
+        if meta.get("root")
+    ]
+
+
+def _resolve_model_path(m: dict[str, Any], anc: str) -> str:
+    """Resolve the authoritative config/model-card directory.
+
+    An exact runtime root is stronger than an engine path or served alias. A
+    loose name is accepted only when it identifies one local checkpoint.
+    """
+    roots = _model_roots(m)
+    for root in roots:
+        if root.startswith("/") and os.path.isdir(root) \
+                and os.path.exists(os.path.join(root, "config.json")):
+            return root
+        exact = _match_local_dir(root, allow_partial=False)
+        if exact:
+            return exact
+    cands: list[str] = []
+    if m.get("srv_model_path"):
+        cands.append(str(m["srv_model_path"]))
+    for fl in ("--model-path", "--model_path", "--model"):
+        value = _flag(anc, fl)
+        if value:
+            cands.append(value)
+    for candidate in cands:
+        if candidate.startswith("/") and os.path.isdir(candidate) \
+                and os.path.exists(os.path.join(candidate, "config.json")):
+            return candidate
+    if any(os.path.basename(root.rstrip("/")).lower() not in
+           {"model", "models", "checkpoint", "weights"} for root in roots):
+        return ""  # An unavailable explicit checkpoint must not borrow alias metadata.
+    # Container paths and repository IDs may not exist in the host namespace.
+    # Retain ambiguity rather than selecting the first similarly named variant.
+    for name in roots + cands + list(m.get("model_names") or []):
+        match = _match_local_dir(name)
+        if match:
+            return match
+    return ""
+
+
+def _runtime_artifact_path(m: dict[str, Any], anc: str, config_path: str) -> str:
+    package = _flare_run_package(anc) if m.get("engine") == "Flare" else ""
+    if package:
+        return package
+    for value in (
+        m.get("srv_model_path"),
+        _flag(anc, "--model-path", "--model_path", "--model", "--ckpt", "--gguf"),
+    ):
+        if value:
+            return str(value)
+    for root in _model_roots(m):
+        if root.startswith("/"):
+            return root
+    return config_path
+
+
+def _package_name(runtime_path: str, engine: str) -> str:
+    if engine != "Flare" or not runtime_path:
+        return ""
+    path = runtime_path.rstrip("/")
+    if path.lower().endswith((".safetensors", ".gguf", ".bin", ".pt", ".pth",
+                              ".onnx", ".ckpt", ".engine")):
+        return os.path.basename(os.path.dirname(path))
+    return os.path.basename(path)
+
+
+def _deepseek_v41_details(source_identity: str, alias: str, disk: dict[str, Any]) -> dict[str, str]:
+    """Describe explicit V4.1 Flash lineage without guessing from the engine."""
+    source_leaf = os.path.basename((source_identity or "").rstrip("/"))
+    source = source_leaf.lower()
+    alias_l = (alias or "").lower()
+    if not re.search(r"deepseek[-_ ]?v4[._]?1[-_ ]?flash|ds4\.?1f|ds41f|warmind", source or alias_l):
+        return {}
+
+    # API root/config identity is authoritative. A served alias fills gaps only
+    # when no source identity exists; it cannot relabel stock weights as a
+    # derivative or imply a package precision.
+    identity_text = source or alias_l
+    checkpoint_match = re.search(
+        r"(?:flash|checkpoint|ckpt|warmind)[-_ ]*(\d{4})(?:\D|$)", identity_text
+    )
+    checkpoint = checkpoint_match.group(1) if checkpoint_match else ""
+    explicit_abliterated = "abliterat" in identity_text
+    known_warmind_root = (
+        "deepseek-v4.1-flash-1017-abliterated-native-overnight" in source
+        or "deepseek-v4.1-flash-1017-abliterated-lossless-csf" in source
+        or bool(re.fullmatch(r"warmind[-_ ]1017(?:[-_ ](?:nvfp4|lossless|csf|native))*", source))
+    )
+    warmind = "warmind" in identity_text or known_warmind_root
+    explicit_abliterated = explicit_abliterated or known_warmind_root
+    quant_text = str(disk.get("quant") or "").lower()
+    csf = "csf" in source or "csf" in quant_text
+    quant_method = str(disk.get("_quant_method") or "").lower()
+    nvidia_nvfp4 = ("nvfp4" in source or quant_method == "nvfp4") and not csf
+    expert_dtype = str(disk.get("_expert_dtype") or "").lower()
+    mixed_fp8_fp4 = quant_method == "fp8" and expert_dtype == "fp4"
+    native_mixed = mixed_fp8_fp4 and "native" in source
+
+    canonical = source.replace("_", "-").replace(" ", "-")
+    canonical_match = re.fullmatch(
+        r"deepseek-v4\.1-flash(?:-1017)?"
+        r"(?:-(?:stock|native|mixed|overnight|lossless|csf|fp4|fp8|mxfp4|experts?|nvidia|nvfp4))*",
+        canonical,
+    )
+    stock = bool(source and canonical_match and not explicit_abliterated and not warmind)
+    if not checkpoint and canonical_match and not re.search(r"flash-\d{4}", canonical):
+        checkpoint = "Original"
+
+    variant_parts: list[str] = []
+    if explicit_abliterated:
+        variant_parts.append("WARMIND abliterated" if warmind else "Abliterated")
+    elif warmind:
+        variant_parts.append("WARMIND")
+    elif stock:
+        variant_parts.append("Stock")
+    if csf:
+        variant_parts.append("Lossless FP4-CSF")
+    elif nvidia_nvfp4:
+        variant_parts.append("NVIDIA NVFP4")
+    elif native_mixed:
+        variant_parts.append("Native mixed FP8/FP4")
+    elif mixed_fp8_fp4:
+        variant_parts.append("Mixed FP8/FP4")
+
+    if checkpoint == "1017":
+        prose = (
+            "DeepSeek V4.1 Flash 1017 updates the sparse-MoE/MLA original with "
+            "documented gains in reasoning, coding, agentic and visual tasks."
+        )
+    elif checkpoint == "Original":
+        prose = (
+            "DeepSeek V4.1 Flash is DeepSeek AI's original sparse-MoE/MLA "
+            "long-context release spanning text and vision."
+        )
+    elif checkpoint:
+        prose = (
+            f"DeepSeek V4.1 Flash checkpoint {checkpoint} retains its exact runtime "
+            "identity; it is not relabelled as the original or 1017 checkpoint."
+        )
+    else:
+        prose = (
+            "DeepSeek V4.1 Flash is DeepSeek AI's sparse-MoE/MLA long-context "
+            "model spanning text and vision."
+        )
+    if explicit_abliterated:
+        lineage = "WARMIND abliterated" if warmind else "abliterated"
+        prose += (
+            f" This {lineage} derivative applies a targeted refusal-direction "
+            "weight edit; it is not the stock checkpoint."
+        )
+    elif warmind and not source:
+        prose += (
+            " WARMIND identifies the local model family; no checkpoint or weight "
+            "precision is inferred from that alias alone."
+        )
+    elif stock:
+        prose += " This identity denotes the stock DeepSeek checkpoint."
+    if csf:
+        prose += (
+            " LiL's lossless CSF packaging compresses routed-expert scales while "
+            "preserving dense tensors; it is distinct from NVIDIA NVFP4."
+        )
+    elif nvidia_nvfp4:
+        prose += (
+            " This identity explicitly denotes NVIDIA NVFP4 weights, not LiL "
+            "lossless CSF or native mixed FP8/FP4."
+        )
+    elif mixed_fp8_fp4:
+        dtype = str(disk.get("dtype") or "").lower()
+        dtype_label = {
+            "bfloat16": "BF16", "bf16": "BF16", "float16": "FP16",
+            "float32": "FP32",
+        }.get(dtype, dtype.upper())
+        dtype_clause = f"{dtype_label} model dtype, " if dtype_label else ""
+        precision = "native mixed precision" if native_mixed else "mixed precision"
+        prose += (
+            f" Config records {dtype_clause}FP8 quantization and FP4 experts—"
+            f"{precision}, not NVIDIA whole-model NVFP4."
+        )
+
+    quant = str(disk.get("quant") or "")
+    if csf:
+        quant = "LOSSLESS FP4-CSF"
+    elif nvidia_nvfp4:
+        quant = "NVIDIA NVFP4"
+    display_name = ""
+    if checkpoint in ("Original", "1017") and (canonical_match or known_warmind_root):
+        display_name = "DeepSeek V4.1 Flash" + (f" {checkpoint}" if checkpoint != "Original" else "")
+        if warmind:
+            display_name += " · WARMIND"
+    return {
+        "display_name": display_name,
+        "variant": " · ".join(variant_parts),
+        "checkpoint": checkpoint,
+        "blurb": prose,
+        "quant": quant,
+    }
+
+
 def enrich_models(models: list[dict[str, Any]], now: float) -> None:
-    """Attach m['intel'] — identity, architecture, provenance and serving facts.
-    Cheap per tick: disk facts and engine probes are cached; /proc reads are
-    behind the 60 s ancestor-cmdline cache."""
+    """Attach identity, architecture, provenance and serving facts."""
     for m in models:
         pids = m.get("worker_pids") or []
         anc = "\n".join(_ancestor_cmdlines(p) for p in pids[:3])
-        path = _resolve_model_path(m, anc)
-        disk = disk_intel(path) if path else {}
+        config_path = _resolve_model_path(m, anc)
+        disk = disk_intel(config_path) if config_path else {}
         served = next(iter(m.get("model_names") or []), "")
-        display = served or (os.path.basename(path.rstrip("/")) if path else "")
-        kb = kb_lookup(f"{served} {os.path.basename(path)}")
+        roots = _model_roots(m)
+        weight_identity = roots[0] if roots else (
+            os.path.basename(config_path.rstrip("/")) if config_path else served
+        )
+        display_name = (
+            os.path.basename(weight_identity.rstrip("/"))
+            if "/" in weight_identity else weight_identity
+        )
+        runtime_path = _runtime_artifact_path(m, anc, config_path)
+        distinct_config = ""
+        if config_path and runtime_path:
+            if os.path.realpath(config_path) != os.path.realpath(runtime_path):
+                distinct_config = config_path
+        source_identity = roots[0] if roots else (
+            os.path.basename(config_path.rstrip("/")) if config_path else ""
+        )
+        kb = kb_lookup(weight_identity) or kb_lookup(served)
+        details = _deepseek_v41_details(source_identity, served, disk)
         meta = next(iter(m.get("model_meta") or []), {})
         ctx_srv = meta.get("max_model_len") or m.get("srv_ctx") or _int_flag(anc, "--max-model-len")
         tp = _int_flag(anc, "--tensor-parallel-size", "--tp-size", "--tp", "-tp") \
             or (len(m.get("gpu_indices") or []) or None)
         starts = [t for t in (_pid_started(p) for p in pids) if t]
+        summary = disk.get("summary", "")
+        if details:
+            facts = []
+            if m.get("engine"):
+                runtime = f"Served by {m['engine']}"
+                if tp:
+                    runtime += f" across {tp} GPU{'s' if tp != 1 else ''}"
+                if ctx_srv:
+                    runtime += f" with a {int(ctx_srv):,}-token context window"
+                facts.append(runtime + ".")
+            moe = disk.get("moe") or {}
+            if moe.get("experts") and moe.get("active"):
+                routing = f"{moe['experts']} routed experts, {moe['active']} selected per token"
+                if moe.get("shared"):
+                    routing += f" plus {moe['shared']} shared"
+                facts.append(routing + ".")
+            draft_tokens = _int_flag(anc, "--mtp-draft-tokens") if m.get("engine") == "Flare" else None
+            if draft_tokens:
+                facts.append(f"MTP uses up to {draft_tokens} draft tokens per step.")
+            summary = " ".join(facts)
         m["intel"] = {
-            "display_name": display,
-            "path": path,
+            "display_name": details.get("display_name") or display_name,
+            "weight_identity": weight_identity,
+            "package": _package_name(runtime_path, m.get("engine", "")),
+            "variant": details.get("variant", ""),
+            "checkpoint": details.get("checkpoint", ""),
+            "path": runtime_path,
+            "config_path": distinct_config,
             "family": kb.get("family", ""),
             "creator": kb.get("creator", ""),
             "origin": kb.get("origin", ""),
-            "blurb": kb.get("blurb", ""),
-            "summary": disk.get("summary", ""),
+            "blurb": details.get("blurb") or kb.get("blurb", ""),
+            "summary": summary,
             "license": disk.get("license", ""),
             "base_model": disk.get("base_model") or [],
             "arch": disk.get("arch", ""),
@@ -720,7 +999,7 @@ def enrich_models(models: list[dict[str, Any]], now: float) -> None:
             "kv_heads": disk.get("kv_heads"),
             "vocab": disk.get("vocab"),
             "moe": disk.get("moe"),
-            "quant": disk.get("quant", ""),
+            "quant": details.get("quant", disk.get("quant", "")),
             "dtype": disk.get("dtype", ""),
             "ctx_native": disk.get("ctx_native"),
             "ctx_serving": ctx_srv,
@@ -821,7 +1100,8 @@ def _cmdline_model_paths(anc: str) -> set:
 
 
 _APP_SIGS = [
-    ("vllm", "vLLM"), ("sglang", "SGLang"), ("llama-server", "llama.cpp"), ("llama.cpp", "llama.cpp"),
+    ("flare", "Flare"), ("vllm", "vLLM"), ("sglang", "SGLang"),
+    ("llama-server", "llama.cpp"), ("llama.cpp", "llama.cpp"),
     ("ollama", "Ollama"), ("comfyui", "ComfyUI"), ("ComfyUI", "ComfyUI"), ("ltx", "LTX-2"),
     ("text-generation", "TGI"), ("exllama", "ExLlama"), ("ktransformers", "KTransformers"),
     ("diffusers", "Diffusers"), ("whisper", "Whisper"), ("torchrun", "torchrun"), ("accelerate", "Accelerate"),
@@ -851,6 +1131,8 @@ def _model_key_name(path: str) -> tuple:
     base = os.path.basename(p)
     if re.search(r"-\d{5}-of-\d{5}", base) or os.path.exists(os.path.join(d, "config.json")):
         return d, os.path.basename(d)
+    if base == "model.safetensors" and os.path.basename(d):
+        return p, os.path.basename(d)
     return p, re.sub(r"\.(safetensors|gguf|bin|pt|pth|onnx|ckpt|engine)$", "", base)
 
 
@@ -911,10 +1193,12 @@ def _probe_port_models(port: int) -> list:
 
 _SERVE_SIG_RE = re.compile(
     r"(vllm(?:\.entrypoints\S*)?\s+serve|-m\s+vllm\.entrypoints|sglang\.launch_server|"
-    r"llama-server|ollama\s+(?:serve|runner)|text-generation-launcher|lmdeploy\s+serve)", re.I)
+    r"(?:^|\s)(?:\S*/)?flare\s+run\b|llama-server|ollama\s+(?:serve|runner)|"
+    r"text-generation-launcher|lmdeploy\s+serve)", re.I)
 
-_ENGINE_SIGS = [("vllm", "vLLM"), ("sglang", "SGLang"), ("llama-server", "llama.cpp"),
-                ("ollama", "Ollama"), ("text-generation", "TGI"), ("lmdeploy", "LMDeploy")]
+_ENGINE_SIGS = [("flare", "Flare"), ("vllm", "vLLM"), ("sglang", "SGLang"),
+                ("llama-server", "llama.cpp"), ("ollama", "Ollama"),
+                ("text-generation", "TGI"), ("lmdeploy", "LMDeploy")]
 
 
 def _clean_arg(v: str) -> str:
@@ -942,9 +1226,13 @@ def _scan_serving_procs() -> list:
             continue
         if not cmd or not _SERVE_SIG_RE.search(cmd):
             continue
-        engine = next((n for s, n in _ENGINE_SIGS if s in cmd.lower()), "")
-        mpath = ""
+        engine = "Flare" if _FLARE_RUN_RE.search(cmd) else next(
+            (n for s, n in _ENGINE_SIGS if s != "flare" and s in cmd.lower()), ""
+        )
+        mpath = _flare_run_package(cmd) if engine == "Flare" else ""
         for fl in ("--model-path", "--model_path", "--model", "--ckpt", "--gguf"):
+            if mpath:
+                break
             v = _flag(cmd, fl)
             if v and not v.startswith("-"):
                 mpath = v
@@ -955,10 +1243,13 @@ def _scan_serving_procs() -> list:
             mt = re.search(r"\bserve\s+([^-\s]\S*)", cmd)
             if mt:
                 mpath = mt.group(1)
+        port = _int_flag(cmd, "--port")
+        if port is None and engine == "Flare":
+            port = 8000
         out.append({
             "pid": pid,
             "engine": engine,
-            "port": _int_flag(cmd, "--port"),
+            "port": port,
             "name": _clean_arg(_flag(cmd, "--served-model-name", "--served_model_name", "--model-name", "--alias")),
             "mpath": _clean_arg(mpath),
         })
@@ -988,31 +1279,47 @@ def _local_model_dirs() -> list:
 
 
 def _resolve_serving_path(sp: dict) -> str:
-    """Best-effort model dir for a serving proc: host path → container path via
-    /proc/<pid>/root (readable only with privilege) → fuzzy local-dir match on
-    the served model name."""
+    """Best-effort host artifact: direct path, container path, then local config."""
     mp = sp.get("mpath") or ""
-    if mp and os.path.isdir(mp):
+    if mp and (os.path.isdir(mp) or os.path.isfile(mp)):
         return mp
     if mp.startswith("/"):
         alt = f"/proc/{sp['pid']}/root{mp}"
         try:
-            if os.path.isdir(alt) and os.path.exists(os.path.join(alt, "config.json")):
+            if os.path.isfile(alt) or (
+                os.path.isdir(alt) and os.path.exists(os.path.join(alt, "config.json"))
+            ):
                 return alt
         except OSError:
             pass
     return _match_local_dir(sp.get("name") or os.path.basename(mp.rstrip("/")))
 
 
-def _match_local_dir(name: str) -> str:
-    n = (name or "").lower().replace(" ", "")
-    if not n:
+def _match_local_dir(name: str, allow_partial: bool = True) -> str:
+    """Match a checkpoint basename exactly, or uniquely when partial."""
+    leaf = os.path.basename((name or "").rstrip("/")).casefold().strip()
+    if not leaf:
         return ""
-    for d in _local_model_dirs():
-        b = os.path.basename(d).lower()
-        if n in b or b in n:
-            return d
-    return ""
+    dirs = _local_model_dirs()
+    exact = [d for d in dirs if os.path.basename(d).casefold() == leaf]
+    if exact:
+        return exact[0]
+
+    def normalized(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", value.casefold())
+
+    needle = normalized(leaf)
+    canonical = [d for d in dirs if normalized(os.path.basename(d)) == needle]
+    if canonical:
+        return canonical[0]
+    if not allow_partial or not needle:
+        return ""
+    matches = {
+        d for d in dirs
+        if needle in normalized(os.path.basename(d))
+        or normalized(os.path.basename(d)) in needle
+    }
+    return next(iter(matches)) if len(matches) == 1 else ""
 
 
 def _intel_lite(kb: dict, disk: dict) -> dict:
@@ -1471,35 +1778,56 @@ def scrape_endpoint(cfg: dict[str, Any], now: float) -> dict[str, Any]:
         "srv_model_path": "",
         "srv_ctx": None,
     }
+    api_prefix = ""
     code, body = http_get(cfg["endpoint"].rstrip("/") + "/v1/models")
     if code == 200:
         try:
             j = json.loads(body)
-            out["model_names"] = [m.get("id", "") for m in j.get("data", [])]
-            out["model_meta"] = [{"id": d.get("id", ""), "root": d.get("root") or "",
-                                  "max_model_len": d.get("max_model_len"), "created": d.get("created")}
-                                 for d in j.get("data", [])]
+            data = j.get("data", [])
+            out["model_names"] = [m.get("id", "") for m in data]
+            out["model_meta"] = [
+                {
+                    "id": d.get("id", ""),
+                    "root": d.get("root") or "",
+                    "max_model_len": d.get("max_model_len"),
+                    "created": d.get("created"),
+                    "flare": isinstance(d.get("flare"), dict),
+                }
+                for d in data
+            ]
+            if any(meta["flare"] for meta in out["model_meta"]):
+                api_prefix = "flare"
             if out["model_names"]:
                 out["healthy"] = True
+                if str(cfg.get("id") or "").startswith("auto-"):
+                    out["label"] = f"{out['model_names'][0]} · auto"
+                    cfg["label"] = out["label"]
         except Exception:
             pass
     else:
         out["error"] = body
-    prefix = ""
+    model_signature = json.dumps(out["model_meta"], sort_keys=True, separators=(",", ":"))
+    prefix = api_prefix
     code2, body2 = http_get(cfg["endpoint"].rstrip("/") + "/metrics")
     if code2 == 200:
         out["healthy"] = True
         samples = parse_prom(body2)
-        prefix = ("vllm" if any(s["name"].startswith("vllm:") for s in samples)
-                  else "sglang" if any(s["name"].startswith("sglang:") for s in samples) else "")
+        metric_prefix = (
+            "flare" if any(s["name"].startswith("flare_") for s in samples)
+            else "vllm" if any(s["name"].startswith("vllm:") for s in samples)
+            else "sglang" if any(s["name"].startswith("sglang:") for s in samples)
+            else ""
+        )
+        if not prefix:
+            prefix = metric_prefix
         prompt_total = 0.0
         gen_total = 0.0
         req_total = 0.0
         running = 0.0
         waiting = 0.0
         kv = 0.0
-        ttft = None
-        itl = None
+        flare_total_kv_pages = 0.0
+        flare_free_kv_pages = 0.0
         # SGLang live telemetry: realtime token counters increment per forward
         # batch (unlike *_tokens_total, which only bump at request completion),
         # and latency histograms yield windowed TTFT / inter-token averages.
@@ -1540,19 +1868,27 @@ def scrape_endpoint(cfg: dict[str, Any], now: float) -> dict[str, Any]:
                 pc_h += v
             elif n in ("vllm:num_preemptions_total",):
                 preempt += v
-            # vLLM names
-            if n in ("vllm:prompt_tokens_total", "sglang:prompt_tokens_total"):
+            # Token, queue and request counters across supported engines.
+            if n in ("vllm:prompt_tokens_total", "sglang:prompt_tokens_total",
+                     "flare_prefill_tokens_total"):
                 prompt_total += v
-            elif n in ("vllm:generation_tokens_total", "sglang:generation_tokens_total"):
+            elif n in ("vllm:generation_tokens_total", "sglang:generation_tokens_total",
+                       "flare_generated_tokens_total"):
                 gen_total += v
-            elif n in ("vllm:num_requests_running", "sglang:num_running_reqs"):
+            elif n in ("vllm:num_requests_running", "sglang:num_running_reqs",
+                       "flare_active_requests"):
                 running = max(running, v)
-            elif n in ("vllm:num_requests_waiting", "sglang:num_queue_reqs"):
+            elif n in ("vllm:num_requests_waiting", "sglang:num_queue_reqs",
+                       "flare_pending_requests"):
                 waiting = max(waiting, v)
             elif n in ("vllm:gpu_cache_usage_perc", "vllm:kv_cache_usage_perc", "sglang:token_usage"):
                 kv = max(kv, v * (100.0 if v <= 1.0 else 1.0))
-            elif n in ("vllm:request_success_total",):
+            elif n in ("vllm:request_success_total", "flare_requests_completed_total"):
                 req_total += v
+            elif n == "flare_total_kv_pages":
+                flare_total_kv_pages = max(flare_total_kv_pages, v)
+            elif n == "flare_free_kv_pages":
+                flare_free_kv_pages = max(flare_free_kv_pages, v)
             elif n == "sglang:realtime_tokens_total":
                 # max across rank samples: only rank 0 reports unless
                 # --enable-metrics-for-all-schedulers duplicates the counters.
@@ -1569,15 +1905,19 @@ def scrape_endpoint(cfg: dict[str, Any], now: float) -> dict[str, Any]:
                 itl_sum += v
             elif n == "sglang:inter_token_latency_seconds_count":
                 itl_cnt += v
+        if flare_total_kv_pages > 0:
+            used_pages = max(0.0, min(flare_total_kv_pages,
+                                      flare_total_kv_pages - flare_free_kv_pages))
+            kv = used_pages / flare_total_kv_pages * 100.0
         out["prompt_tokens_total"] = int(prompt_total)
         out["generation_tokens_total"] = int(gen_total)
         out["requests_total"] = int(req_total)
         out["running"] = int(running)
         out["waiting"] = int(waiting)
         out["kv_cache_pct"] = float(kv)
-        # delta TPS
+        # Delta telemetry is valid only within one exact served-model identity.
         prev = STATE.prev_counters.get(cfg["id"])
-        if prev:
+        if prev and prev.get("model_signature") == model_signature:
             dt = max(now - prev["ts"], 1e-3)
             d_in = max(prompt_total - prev["prompt"], 0.0)
             d_out = max(gen_total - prev["gen"], 0.0)
@@ -1587,6 +1927,7 @@ def scrape_endpoint(cfg: dict[str, Any], now: float) -> dict[str, Any]:
                 d_in = d_out = 0.0
             out["input_tps"] = d_in / dt
             out["output_tps"] = d_out / dt
+            out["request_rate"] = max(req_total - prev.get("req", 0.0), 0.0) / dt
             out["total_tps"] = out["input_tps"] + out["output_tps"]
             if rt_out is not None:
                 out["input_tps"] = max((rt_in or 0.0) - prev.get("rt_in", 0.0), 0.0) / dt
@@ -1636,7 +1977,8 @@ def scrape_endpoint(cfg: dict[str, Any], now: float) -> dict[str, Any]:
                 out["prefix_hit_pct"] = prev["prefix_hit_pct"]
             out["preemptions_delta"] = max(0.0, preempt - prev.get("preempt", 0.0))
         STATE.prev_counters[cfg["id"]] = {
-            "prompt": prompt_total, "gen": gen_total, "ts": now,
+            "prompt": prompt_total, "gen": gen_total, "req": req_total, "ts": now,
+            "model_signature": model_signature,
             "ttft_b": ttft_b, "itl_b": itl_b, "pc_q": pc_q, "pc_h": pc_h, "preempt": preempt,
             "ttft_p50_ms": out.get("ttft_p50_ms"), "ttft_p95_ms": out.get("ttft_p95_ms"),
             "itl_p50_ms": out.get("itl_p50_ms"), "itl_p95_ms": out.get("itl_p95_ms"),
@@ -1650,9 +1992,12 @@ def scrape_endpoint(cfg: dict[str, Any], now: float) -> dict[str, Any]:
         if not out["error"]:
             out["error"] = body2
     if out["healthy"]:
-        extras = probe_engine(cfg, prefix)
+        extras = probe_engine(cfg, prefix, model_signature)
         lbl = (cfg.get("label") or "").lower()
-        out["engine"] = extras["engine"] or ("vLLM" if "vllm" in lbl else "SGLang" if "sglang" in lbl else "")
+        out["engine"] = extras["engine"] or (
+            "Flare" if "flare" in lbl else "vLLM" if "vllm" in lbl
+            else "SGLang" if "sglang" in lbl else ""
+        )
         out["engine_version"] = extras["engine_version"]
         out["srv_model_path"] = extras["srv_model_path"]
         out["srv_ctx"] = extras["srv_ctx"]
@@ -1794,9 +2139,13 @@ def resolve_model_gpus(models: list[dict[str, Any]], gpus: list[dict[str, Any]])
             if not matched and names:
                 matched = collect(lambda nm, anc: any(n in anc for n in names))
             if not matched:
-                kw = next((k for k in ("vllm", "sglang") if k in (m.get("label") or "").lower()), None)
-                rivals = [x for x in models if x is not m and x.get("healthy")
-                          and kw and kw in (x.get("label") or "").lower()]
+                engine_text = f"{m.get('engine') or ''} {m.get('label') or ''}".lower()
+                kw = next((k for k in ("vllm", "sglang", "flare") if k in engine_text), None)
+                rivals = [
+                    x for x in models
+                    if x is not m and x.get("healthy") and kw
+                    and kw in f"{x.get('engine') or ''} {x.get('label') or ''}".lower()
+                ]
                 if kw and not rivals:
                     matched = collect(lambda nm, anc: kw in nm.lower() or kw in anc.lower())
         idxs = sorted({i for i, _, _ in matched})
@@ -1806,38 +2155,263 @@ def resolve_model_gpus(models: list[dict[str, Any]], gpus: list[dict[str, Any]])
 
 
 ENERGY_FILE = APP_ROOT / "energy_day.json"
+ENERGY_MONTH_FILE = APP_ROOT / "energy_month.json"
+TARIFF_FILE = APP_ROOT / "energy_tariff.json"
 _energy_day: dict[str, Any] = {}
+_energy_month: dict[str, Any] = {}
 _eff_window: deque = deque(maxlen=120)   # (ts, tokens_total, energy_j)
 
 
-def _energy_today(total_j: float, now: float) -> float:
-    """Joules consumed since local midnight (baseline persisted so a dashboard
-    restart doesn't reset the day). A driver reload resets NVML's counter: a
-    total below the baseline re-bases to the new counter."""
-    global _energy_day
-    day = time.strftime("%Y-%m-%d", time.localtime(now))
+def _load_tariff() -> dict[str, Any]:
+    """Electricity price for this site, editable without touching the app.
+
+    Single-rate household tariff with monthly volume bands (≤3900 / ≤6000 /
+    above kWh). Env override `NVTOP_ELECTRICITY_RATES` wins: three comma- or
+    semicolon-separated ₽/kWh values, low→high band."""
+    tariff: dict[str, Any] = {
+        "place": "Подмосковье · сельская местность",
+        "category": "сельское население",
+        "period": "2026 · II полугодие",
+        "currency": "RUB",
+        "symbol": "₽",
+        "band_limits_kwh": [3900.0, 6000.0],
+        "rates_rub_kwh": [7.46, 8.04, 10.86],
+        "night_rate_rub_kwh": 4.12,
+        "tz": "Europe/Moscow",
+    }
+    try:
+        loaded = json.loads(TARIFF_FILE.read_text())
+        if isinstance(loaded, dict):
+            tariff.update({k: v for k, v in loaded.items() if not k.startswith("_")})
+    except Exception:
+        pass
+    raw = os.environ.get("NVTOP_ELECTRICITY_RATES", "")
+    vals = [v for v in re.split(r"[;, ]+", raw.strip()) if v]
+    if len(vals) == 3:
+        try:
+            tariff["rates_rub_kwh"] = [float(v) for v in vals]
+        except ValueError:
+            pass
+    rates = tariff.get("rates_rub_kwh") or [0.0, 0.0, 0.0]
+    if len(rates) < 3:
+        rates = list(rates) + [rates[-1] if rates else 0.0] * (3 - len(rates))
+    tariff["rates_rub_kwh"] = [float(r) for r in rates[:3]]
+    lim = tariff.get("band_limits_kwh") or [3900.0, 6000.0]
+    tariff["band_limits_kwh"] = [float(x) for x in lim][:2] or [3900.0, 6000.0]
+    return tariff
+
+
+TARIFF = _load_tariff()
+
+
+def _tariff_tz():
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(str(TARIFF.get("tz") or "Europe/Moscow"))
+    except Exception:
+        return timezone.utc
+
+
+ENERGY_TZ = _tariff_tz()
+
+
+def _rate_for(month_kwh: float) -> float:
+    """Marginal ₽/kWh: the band the next kilowatt-hour falls into."""
+    rates = TARIFF["rates_rub_kwh"]
+    limits = TARIFF["band_limits_kwh"]
+    if month_kwh <= limits[0]:
+        return rates[0]
+    if month_kwh <= limits[1]:
+        return rates[1]
+    return rates[2]
+
+
+def _stamp(fmt: str, now: float) -> str:
+    return datetime.fromtimestamp(now, ENERGY_TZ).strftime(fmt)
+
+
+def _blank_period(stamp: str, total_j: float, now: float) -> dict[str, Any]:
+    return {"stamp": stamp, "base_j": total_j, "acc_j": 0.0, "last_j": total_j,
+            "cost_rub": 0.0, "saved": 0.0}
+
+
+def _advance_period(state: dict, path: Path, stamp: str, total_j: float, now: float) -> tuple[float, float]:
+    """Roll one billing period forward; return (kWh consumed this tick, kWh so far).
+
+    The driver's lifetime joule counter is absolute while it lives, so
+    consumption = accrued + (total − counter-at-period-start). A counter that
+    drops below the baseline means the driver reset it — re-base and keep the
+    amount already accrued.
+    """
+    reset = False
+    if not state or state.get("stamp") != stamp:
+        state.clear()
+        state.update(_blank_period(stamp, total_j, now))
+        return 0.0, 0.0
+    if total_j < float(state.get("base_j") or 0.0) - 1.0:
+        state["acc_j"] = float(state.get("acc_j") or 0.0) + max(
+            0.0, float(state.get("last_j") or 0.0) - float(state.get("base_j") or 0.0))
+        state["base_j"] = total_j
+        state["last_j"] = total_j
+        reset = True
+    delta_j = 0.0 if reset else max(0.0, total_j - float(state.get("last_j") or 0.0))
+    state["last_j"] = total_j
+    kwh = float(state.get("acc_j") or 0.0) + max(
+        0.0, float(state.get("last_j") or 0.0) - float(state.get("base_j") or 0.0))
+    return delta_j / 3.6e6, kwh
+
+
+def _charge(delta_kwh: float, month_kwh_before: float) -> float:
+    """Split one tick's kWh across tariff bands and return its ₽ cost."""
+    if delta_kwh <= 0:
+        return 0.0
+    limits = TARIFF["band_limits_kwh"]
+    rates = TARIFF["rates_rub_kwh"]
+    pos = month_kwh_before
+    remaining = delta_kwh
+    cost = 0.0
+    for idx in range(3):
+        rate = rates[idx]
+        if idx < 2:
+            take = min(remaining, max(0.0, limits[idx] - pos))
+        else:
+            take = remaining
+        cost += take * rate
+        remaining -= take
+        pos += take
+        if remaining <= 1e-12:
+            break
+    return cost
+
+
+def _seed_cost(state: dict) -> None:
+    """Give periods that predate cost tracking a starting ₽ figure.
+
+    Upgrades and the first boot after this feature lands arrive with kWh already
+    accrued but no accrued cost. Those kWh are priced at the entry band so the
+    tile never shows energy without money; the result is marked approximate."""
+    if not state or state.get("cost_seeded"):
+        return
+    kwh = (float(state.get("acc_j") or 0.0) + max(
+        0.0, float(state.get("last_j") or 0.0) - float(state.get("base_j") or 0.0))) / 3.6e6
+    expected = kwh * TARIFF["rates_rub_kwh"][0]
+    # Accrued money far below what the accrued kWh are worth means the period
+    # started before this feature (or after a crash without a flush): top it up
+    # so the tile never reads "9 kWh today, ₽3".
+    if kwh > 0.2 and float(state.get("cost_rub") or 0.0) < expected * 0.55:
+        state["cost_rub"] = expected
+        state["cost_seeded"] = True
+    elif kwh <= 0.2:
+        state["cost_seeded"] = True
+
+
+def _account_energy(total_j: float, now: float) -> dict[str, float]:
+    """Advance day + month energy/cost accumulators for one GPU poll tick."""
+    global _energy_day, _energy_month
+    day = _stamp("%Y-%m-%d", now)
+    month = _stamp("%Y-%m", now)
     if not _energy_day:
         try:
             _energy_day = json.loads(ENERGY_FILE.read_text())
         except Exception:
             _energy_day = {}
-    if _energy_day.get("day") != day or total_j < _energy_day.get("base_j", 0) - 1:
-        carry = 0.0 if _energy_day.get("day") != day else _energy_day.get("acc_j", 0.0) + (_energy_day.get("last_j", 0.0) - _energy_day.get("base_j", 0.0))
-        _energy_day = {"day": day, "base_j": total_j, "acc_j": carry, "last_j": total_j, "saved": 0.0}
-    _energy_day["last_j"] = total_j
-    if now - _energy_day.get("saved", 0.0) > 60:
-        _energy_day["saved"] = now
+    if _energy_day and "stamp" not in _energy_day and _energy_day.get("day"):
+        _energy_day["stamp"] = _energy_day.pop("day")   # pre-2.3 saves
+    if not _energy_month:
         try:
-            ENERGY_FILE.write_text(json.dumps(_energy_day))
+            _energy_month = json.loads(ENERGY_MONTH_FILE.read_text())
         except Exception:
-            pass
-    return _energy_day["acc_j"] + (total_j - _energy_day["base_j"])
+            _energy_month = {}
+
+    # Month first: its position decides the marginal price for this tick.
+    m_kwh_before = 0.0
+    if _energy_month.get("stamp") == month:
+        m_kwh_before = (float(_energy_month.get("acc_j") or 0.0) + max(
+            0.0, float(_energy_month.get("last_j") or 0.0) - float(_energy_month.get("base_j") or 0.0))) / 3.6e6
+    if _energy_month.get("stamp") != month:
+        _energy_month.clear()
+    _seed_cost(_energy_day)
+    _seed_cost(_energy_month)
+    m_delta, _ = _advance_period(_energy_month, ENERGY_MONTH_FILE, month, total_j, now)
+    tick_cost = _charge(m_delta, m_kwh_before)
+    _energy_month["cost_rub"] = float(_energy_month.get("cost_rub") or 0.0) + tick_cost
+
+    _advance_period(_energy_day, ENERGY_FILE, day, total_j, now)
+    _energy_day["cost_rub"] = float(_energy_day.get("cost_rub") or 0.0) + tick_cost
+
+    for state, path in ((_energy_day, ENERGY_FILE), (_energy_month, ENERGY_MONTH_FILE)):
+        if now - float(state.get("saved") or 0.0) > 60:
+            state["saved"] = now
+            try:
+                path.write_text(json.dumps(state))
+            except Exception:
+                pass
+
+    day_kwh = (float(_energy_day.get("acc_j") or 0.0) + max(
+        0.0, float(_energy_day.get("last_j") or 0.0) - float(_energy_day.get("base_j") or 0.0))) / 3.6e6
+    month_kwh = (float(_energy_month.get("acc_j") or 0.0) + max(
+        0.0, float(_energy_month.get("last_j") or 0.0) - float(_energy_month.get("base_j") or 0.0))) / 3.6e6
+    return {
+        "day_kwh": day_kwh,
+        "day_cost_rub": float(_energy_day.get("cost_rub") or 0.0),
+        "month_kwh": month_kwh,
+        "month_cost_rub": float(_energy_month.get("cost_rub") or 0.0),
+        "rate_rub": _rate_for(month_kwh),
+        "seeded": bool(_energy_day.get("cost_seeded") or _energy_month.get("cost_seeded")),
+    }
+
+
+# ---------- Load averages (uptime-style 1/5/15 min) ----------
+
+LAVG_WINDOWS = (60.0, 300.0, 900.0)
+
+
+class LoadAvg:
+    """Fixed-decay exponential averages, the way uptime's load average works.
+
+    Seeded on first sample (so a fresh process starts AT the current value
+    instead of crawling up from zero), then decayed with
+    α = 1 − exp(−Δ/τ) per window. Fed from the 1 Hz history tick."""
+
+    __slots__ = ("channels", "last_ts")
+
+    def __init__(self) -> None:
+        self.channels: dict[str, list[float] | None] = {
+            "tps": None, "util": None, "power": None, "output": None, "input": None,
+        }
+        self.last_ts = 0.0
+
+    def update(self, now: float, **values: float) -> None:
+        dt = max(1e-3, min(120.0, now - self.last_ts)) if self.last_ts else 0.0
+        self.last_ts = now
+        alphas = [1.0 - pow(2.718281828459045, -dt / tau) for tau in LAVG_WINDOWS]
+        for key, val in values.items():
+            cur = self.channels.get(key)
+            if cur is None:
+                self.channels[key] = [float(val)] * 3
+                continue
+            for i, a in enumerate(alphas):
+                cur[i] = cur[i] + (float(val) - cur[i]) * a
+
+    def snapshot(self) -> dict[str, list[float] | None]:
+        return {k: ([round(x, 3) for x in v] if v else None) for k, v in self.channels.items()}
+
+
+LAVG = LoadAvg()
+
 
 
 def _mask_snapshot(snap: dict) -> None:
     for m in snap.get("models") or []:
         it = m.get("intel") or {}
-        nm = it.get("display_name") or it.get("family") or m.get("label") or "model"
+        nm = it.get("family") or "model"
+        it["display_name"] = nm
+        for key in ("weight_identity", "package", "variant", "checkpoint", "path", "config_path"):
+            it[key] = ""
+        for meta in m.get("model_meta") or []:
+            meta["id"] = nm
+            meta["root"] = ""
+        m["srv_model_path"] = ""
         m["model_names"] = [nm] if m.get("model_names") else []
         m["label"] = nm
         m["endpoint"] = "http://127.0.0.1:" + str(m.get("port") or "8000")
@@ -1879,9 +2453,11 @@ def build_snapshot() -> dict[str, Any]:
     avg_mem = sum(g["memory_pct"] for g in gpus) / max(len(gpus), 1)
     tot_power = sum(g["power_draw_w"] for g in gpus)
     tot_power_limit = sum(g["power_limit_w"] for g in gpus)
-    # energy + efficiency: kWh since midnight, tokens per kJ over a ~2 min window
+    # energy + cost + efficiency: kWh since midnight, ₽ accrued at the site tariff
     tot_energy_j = sum(g.get("energy_j") or 0.0 for g in gpus)
-    energy_today_j = _energy_today(tot_energy_j, now) if tot_energy_j > 0 else 0.0
+    energy = _account_energy(tot_energy_j, now) if tot_energy_j > 0 else {
+        "day_kwh": 0.0, "day_cost_rub": 0.0, "month_kwh": 0.0, "month_cost_rub": 0.0, "rate_rub": _rate_for(0.0)}
+    energy_today_j = energy["day_kwh"] * 3.6e6
     tokens_total = sum((m.get("prompt_tokens_total") or 0) + (m.get("generation_tokens_total") or 0) for m in models)
     tok_per_kj = None
     if tot_energy_j > 0:
@@ -1898,6 +2474,9 @@ def build_snapshot() -> dict[str, Any]:
         STATE.global_hist["gpu_util_avg"].append(avg_util)
         STATE.global_hist["mem_pct_avg"].append(avg_mem)
         STATE.global_hist["power_total"].append(tot_power)
+        # uptime-style 1/5/15 min load averages, fed at the history cadence
+        LAVG.update(now, tps=total_tps, output=total_out_tps, input=total_in_tps,
+                    util=avg_util, power=tot_power)
         STATE.last_history_ts = now
         STATE.history_revision += 1
     # per-GPU TPS share: divide model TPS evenly across its gpu_indices
@@ -1914,6 +2493,12 @@ def build_snapshot() -> dict[str, Any]:
             per_gpu_tps[i]["models"].append({"id": m["id"], "label": m["label"], "names": m["model_names"], "accent": m["accent"]})
     for g in gpus:
         g["tps"] = per_gpu_tps.get(g["index"], {"input": 0.0, "output": 0.0, "total": 0.0, "models": []})
+    _now_m = datetime.fromtimestamp(now, ENERGY_TZ)
+    _y2 = _now_m.year + (1 if _now_m.month == 12 else 0)
+    _m2 = 1 if _now_m.month == 12 else _now_m.month + 1
+    _days_in_month = (datetime(_y2, _m2, 1) - datetime(_now_m.year, _now_m.month, 1)).days
+    _elapsed_days = (_now_m.day - 1) + (_now_m.hour * 3600 + _now_m.minute * 60 + _now_m.second) / 86400.0
+    _month_proj = (energy["month_cost_rub"] / max(_elapsed_days, 0.25)) * _days_in_month
     snap = {
         "generated_at": utc_iso(),
         "host": HOST_LABEL,
@@ -1939,6 +2524,24 @@ def build_snapshot() -> dict[str, Any]:
             "tokens_total": tokens_total,
             "pcie_tx_mbps": pcie_tx,
             "pcie_rx_mbps": pcie_rx,
+            "lavg": {"windows": [60, 300, 900], **LAVG.snapshot()},
+            "cost": {
+                "rub_today": energy["day_cost_rub"],
+                "rub_hour": tot_power / 1000.0 * energy["rate_rub"],
+                "rub_month": energy["month_cost_rub"],
+                "rub_month_projected": _month_proj,
+                "kwh_today": energy["day_kwh"],
+                "kwh_month": energy["month_kwh"],
+                "rate_rub": energy["rate_rub"],
+                "approximate": energy.get("seeded", False),
+                "rates": TARIFF["rates_rub_kwh"],
+                "band_limits": TARIFF["band_limits_kwh"],
+                "place": TARIFF.get("place"),
+                "category": TARIFF.get("category"),
+                "period": TARIFF.get("period"),
+                "symbol": TARIFF.get("symbol", "₽"),
+                "currency": TARIFF.get("currency", "RUB"),
+            },
             "history": {k: list(v) for k, v in STATE.global_hist.items()},
         },
     }
@@ -2076,7 +2679,7 @@ def uptime_seconds() -> float:
 # ---------- Auth ----------
 
 # Credentials live outside the repo: .auth.json {"user": ..., "pass_sha256": ...} next to app.py,
-# or NVTOP_AUTH_USER / NVTOP_PASS_SHA256 in the environment. No default — without them login is closed.
+# or NVTOP_AUTH_USER / NVTOP_PASS_SHA256 in the environment. Multi-user supported via {"users": {user: pass_sha256, ...}}.
 def _auth_cfg() -> dict:
     try:
         return json.loads((APP_ROOT / ".auth.json").read_text())
@@ -2084,9 +2687,52 @@ def _auth_cfg() -> dict:
         return {}
 
 
+def _load_auth_users(cfg: dict) -> dict[str, list[str]]:
+    users: dict[str, list[str]] = {}
+
+    def _add(u: Any, p: Any):
+        if not u:
+            return
+        u_norm = str(u).strip().lower()
+        if u_norm not in users:
+            users[u_norm] = []
+        if isinstance(p, list):
+            for item in p:
+                if item:
+                    val = str(item).strip().lower()
+                    if val not in users[u_norm]:
+                        users[u_norm].append(val)
+        elif p:
+            val = str(p).strip().lower()
+            if val not in users[u_norm]:
+                users[u_norm].append(val)
+
+    raw_users = cfg.get("users")
+    if isinstance(raw_users, dict):
+        for u, p in raw_users.items():
+            _add(u, p)
+    elif isinstance(raw_users, list):
+        for entry in raw_users:
+            if isinstance(entry, dict) and entry.get("user"):
+                _add(entry.get("user"), entry.get("pass_sha256") or entry.get("hashes"))
+
+    single_u = str(cfg.get("user") or "").strip()
+    single_p = str(cfg.get("pass_sha256") or "").strip().lower()
+    if single_u and single_p:
+        _add(single_u, single_p)
+
+    env_u = str(os.environ.get("NVTOP_AUTH_USER") or "").strip()
+    env_p = str(os.environ.get("NVTOP_PASS_SHA256") or "").strip().lower()
+    if env_u and env_p:
+        _add(env_u, env_p)
+
+    return users
+
+
 _AUTH = _auth_cfg()
-AUTH_USER = os.environ.get("NVTOP_AUTH_USER") or str(_AUTH.get("user") or "")
-AUTH_PASS_SHA256 = os.environ.get("NVTOP_PASS_SHA256") or str(_AUTH.get("pass_sha256") or "")
+AUTH_USERS = _load_auth_users(_AUTH)
+AUTH_USER = os.environ.get("NVTOP_AUTH_USER") or str(_AUTH.get("user") or (next(iter(AUTH_USERS.keys()), "") if AUTH_USERS else ""))
+AUTH_PASS_SHA256 = os.environ.get("NVTOP_PASS_SHA256") or str(_AUTH.get("pass_sha256") or ((AUTH_USERS.get(AUTH_USER) or [""])[0] if AUTH_USERS else ""))
 SESSION_TTL = 60 * 60 * 24 * 30  # 30 days
 COOKIE_NAME = "nvtop_session"
 SECRET_FILE = APP_ROOT / ".session-secret"
@@ -2118,10 +2764,16 @@ def sign_session(user: str, exp: int) -> str:
 
 
 def verify_session(token: str) -> bool:
+    global AUTH_USERS
     try:
         user, exp, sig = token.rsplit(".", 2)
         expect = hmac.new(SESSION_SECRET, f"{user}.{exp}".encode(), hashlib.sha256).hexdigest()
-        return hmac.compare_digest(sig, expect) and user == AUTH_USER and int(exp) > time.time()
+        if not (hmac.compare_digest(sig, expect) and int(exp) > time.time()):
+            return False
+        user_norm = user.strip().lower()
+        if user_norm not in AUTH_USERS:
+            AUTH_USERS = _load_auth_users(_auth_cfg())
+        return user_norm in AUTH_USERS
     except Exception:
         return False
 
@@ -2151,7 +2803,7 @@ async def auth_gate(request, call_next):
 # Version token for immutable static assets; bump when shipping UI changes.
 # HTML is always no-cache (ETag revalidation), so a bump here propagates on
 # the next page load through every layer (nginx, CDN, browser, direct :8801).
-ASSET_VERSION = "20261031b"
+ASSET_VERSION = "20261104c"
 
 
 @app.middleware("http")
@@ -2289,20 +2941,39 @@ def login_page(request: Request):
 
 @app.post("/api/auth")
 async def api_auth(request: Request):
+    global AUTH_USERS
     try:
         body = await request.json()
     except Exception:
         body = {}
-    user = str(body.get("login", "")).strip()
+    raw_user = str(body.get("login", "")).strip()
+    user_norm = raw_user.lower()
     pw = str(body.get("password", ""))
-    pw_hash = hashlib.sha256(pw.encode()).hexdigest()
-    ok = bool(AUTH_USER and AUTH_PASS_SHA256) and hmac.compare_digest(user, AUTH_USER) and hmac.compare_digest(pw_hash, AUTH_PASS_SHA256)
+    pw_strip = pw.strip()
+    pw_hash = hashlib.sha256(pw.encode()).hexdigest().lower()
+    pw_strip_hash = hashlib.sha256(pw_strip.encode()).hexdigest().lower()
+
+    expected_hashes = AUTH_USERS.get(user_norm)
+    if not expected_hashes:
+        AUTH_USERS = _load_auth_users(_auth_cfg())
+        expected_hashes = AUTH_USERS.get(user_norm)
+
+    ok = False
+    if expected_hashes:
+        for eh in expected_hashes:
+            if hmac.compare_digest(pw_hash, eh) or hmac.compare_digest(pw_strip_hash, eh):
+                ok = True
+                break
+
     if not ok:
+        sys.stderr.write(f"[AUTH_FAIL] user={repr(raw_user)} pw_len={len(pw)}\n")
+        sys.stderr.flush()
         return JSONResponse({"error": "denied"}, status_code=401)
+
     exp = int(time.time()) + SESSION_TTL
     resp = JSONResponse({"ok": True})
     resp.set_cookie(
-        COOKIE_NAME, sign_session(AUTH_USER, exp),
+        COOKIE_NAME, sign_session(raw_user, exp),
         max_age=SESSION_TTL, httponly=True, samesite="lax", path="/",
     )
     return resp
