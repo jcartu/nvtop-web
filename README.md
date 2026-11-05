@@ -35,9 +35,9 @@ It is built for the machines people actually run inference on: 4×/8× RTX PRO 6
 | Layer | What you see | Source |
 |:--|:--|:--|
 | **Silicon** | Utilization, VRAM allocation and fragmentation, PCIe TX/RX, power draw, cumulative kWh, temperature, fan curves | NVML, 4 Hz |
-| **Serving** | TTFT p50/p95, ITL p50/p95, prefix-cache hit rate, KV-cache occupancy, request queue depth, live token throughput with 1/5/15 min load averages | Prometheus `/metrics` |
+| **Serving** | TTFT p50/p95, ITL p50/p95, prefix-cache hit rate, KV-cache occupancy, request queue depth, live token throughput with 1/5/15 min load averages, and a per-load run ledger (tokens served + uptime) | Prometheus `/metrics` |
 | **Boot** | Weight loading, CUDA graph capture, warmup, structured progress bars with learned ETA | Engine stdout |
-| **Economics** | kWh today, ₽/hour burn at the site's banded tariff, month-to-date and projection, $/Mtok of input and output | NVML energy counters + tariff config |
+| **Economics** | $/Mtok with 1/5/15 averages, per-direction split, kWh today, ₽/hour at the site's banded tariff, plus all-time token volume and vendor-list-price equivalent | NVML energy counters, tariff + API price config, served ledger |
 | **Surface** | Container-query layout, 17 WebGL shader wallpapers, adaptive GPU throttling | Single HTML file |
 
 ### Model identity

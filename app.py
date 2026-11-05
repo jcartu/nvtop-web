@@ -1911,6 +1911,7 @@ def scrape_endpoint(cfg: dict[str, Any], now: float) -> dict[str, Any]:
             kv = used_pages / flare_total_kv_pages * 100.0
         out["prompt_tokens_total"] = int(prompt_total)
         out["generation_tokens_total"] = int(gen_total)
+        accumulate_served(str(cfg.get("endpoint") or ""), prompt_total, gen_total)
         out["requests_total"] = int(req_total)
         out["running"] = int(running)
         out["waiting"] = int(waiting)
@@ -2152,6 +2153,76 @@ def resolve_model_gpus(models: list[dict[str, Any]], gpus: list[dict[str, Any]])
         m["gpu_indices"] = idxs if idxs else list(m.get("cfg_gpu_indices") or [])
         m["worker_pids"] = sorted({pid for _, pid, _ in matched})
         m["vram_mib"] = sum(mem for _, _, mem in matched) or None
+
+
+# ---------- Official API list price (reference economics) ----------
+# DeepSeek V4.1 Flash, published list price per 1M tokens, peak / off-peak.
+# Source: api-docs.deepseek.com/quick_start/pricing (checked 2026-11-05).
+OFFICIAL_PRICING = {
+    "model": "deepseek-v4.1-flash",
+    "in_usd_mtok": float(os.environ.get("NVTOP_API_IN_PRICE", "0.30")),
+    "out_usd_mtok": float(os.environ.get("NVTOP_API_OUT_PRICE", "1.20")),
+    "offpeak_in_usd_mtok": 0.15,
+    "offpeak_out_usd_mtok": 0.60,
+    "unit": "USD per 1M tokens",
+    "note": "peak list price, cache-miss inputs; off-peak halves",
+    "source": "api-docs.deepseek.com/quick_start/pricing",
+    "checked": "2026-11-05",
+}
+
+SERVED_LEDGER_FILE = APP_ROOT / "served_ledger.json"
+_served_ledger: dict[str, Any] = {}
+
+
+def _load_served_ledger() -> dict[str, Any]:
+    global _served_ledger
+    if _served_ledger:
+        return _served_ledger
+    try:
+        _served_ledger = json.loads(SERVED_LEDGER_FILE.read_text())
+    except Exception:
+        _served_ledger = {}
+    _served_ledger.setdefault("since", time.time())
+    _served_ledger.setdefault("in", 0)
+    _served_ledger.setdefault("out", 0)
+    _served_ledger.setdefault("endpoints", {})
+    _served_ledger.setdefault("saved", 0.0)
+    return _served_ledger
+
+
+def accumulate_served(endpoint: str, prompt_total: float, gen_total: float) -> None:
+    """Fold per-endpoint Prometheus counters into a volume that survives reloads.
+
+    Counters reset whenever an engine reloads weights, so a drop re-bases to the
+    new value instead of subtracting: the ledger only ever grows."""
+    led = _load_served_ledger()
+    ent = led["endpoints"].setdefault(endpoint, {"in": 0.0, "out": 0.0, "last_in": 0.0, "last_out": 0.0})
+    for key, last_key, val in (("in", "last_in", prompt_total), ("out", "last_out", gen_total)):
+        d = val - float(ent.get(last_key) or 0.0)
+        if d < 0:            # engine reloaded: the partial new counter is the delta
+            d = val
+        if d > 0:
+            led[key] += d
+            ent[key] = float(ent.get(key) or 0.0) + d
+        ent[last_key] = val
+
+
+def _flush_served_ledger(now: float) -> None:
+    led = _served_ledger
+    if not led or now - float(led.get("saved") or 0.0) < 30:
+        return
+    led["saved"] = now
+    try:
+        SERVED_LEDGER_FILE.write_text(json.dumps(led))
+    except Exception:
+        pass
+
+
+def served_alltime() -> dict[str, Any]:
+    led = _load_served_ledger()
+    total = float(led.get("in") or 0.0) + float(led.get("out") or 0.0)
+    return {"in": float(led.get("in") or 0.0), "out": float(led.get("out") or 0.0),
+            "total": total, "since": datetime.fromtimestamp(float(led.get("since") or time.time()), timezone.utc).isoformat()}
 
 
 ENERGY_FILE = APP_ROOT / "energy_day.json"
@@ -2453,6 +2524,7 @@ def _mask_snapshot(snap: dict) -> None:
 
 def build_snapshot() -> dict[str, Any]:
     now = time.time()
+    _flush_served_ledger(now)
     gpus = collect_gpus()
     # Read the cached LLM-endpoint scrape (refreshed by the slower llm_poller).
     # This keeps the fast GPU tick free of blocking HTTP to the serving stacks.
@@ -2570,6 +2642,8 @@ def build_snapshot() -> dict[str, Any]:
                 "symbol": TARIFF.get("symbol", "₽"),
                 "currency": TARIFF.get("currency", "RUB"),
             },
+            "alltime": served_alltime(),
+            "official_api": OFFICIAL_PRICING,
             "history": {k: list(v) for k, v in STATE.global_hist.items()},
         },
     }
@@ -2831,7 +2905,7 @@ async def auth_gate(request, call_next):
 # Version token for immutable static assets; bump when shipping UI changes.
 # HTML is always no-cache (ETag revalidation), so a bump here propagates on
 # the next page load through every layer (nginx, CDN, browser, direct :8801).
-ASSET_VERSION = "20261104j"
+ASSET_VERSION = "20261104n"
 
 
 @app.middleware("http")

@@ -4,6 +4,17 @@ All notable changes to nvtop-web.
 
 ## [Unreleased]
 
+### Run ledger, vendor-price equivalent, all-time volume
+- Each serving card now carries a **run ledger** in its header: tokens served since the engine loaded
+  its weights (k/M/B compact) and how long it has been up — sourced from the engine's own Prometheus
+  counters, so a reload resets it exactly when treating capacity does.
+- **Economics strip** under the live counters: what this load *would* have cost at DeepSeek V4.1
+  Flash official list price, plus the **all-time** cumulative spend and token volume across reloads,
+  from a new persisted `served_ledger.json` that folds counter deltas and re-bases cleanly on engine
+  restarts. Peak list $0.30 in / $1.20 out per Mtok (off-peak halves), overridable with
+  `NVTOP_API_IN_PRICE` / `NVTOP_API_OUT_PRICE`; tariff provenance in the tooltip.
+- Duplicate raw uptime/token cells removed from the spec sheet; the ledger owns them.
+
 ### Load averages, energy cost, calmer instrumentation
 - 1/5/15 min load averages for total throughput, **input and output tok/s**, GPU utilisation and cluster power, computed
   server-side with uptime-style fixed-decay exponentials and seeded on first sample so a restarted

@@ -8,3 +8,4 @@ __pycache__/
 *.tmp
 .auth.json
 *.conf
+served_ledger.json

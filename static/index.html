@@ -227,6 +227,13 @@ header.top{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-templ
 .model-card .status{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:1.2px;text-transform:uppercase}
 .model-card .status .blip{width:8px;height:8px;border-radius:50%;background:var(--crit);box-shadow:0 0 8px var(--crit)}
 .model-card.healthy .status .blip{background:var(--good);box-shadow:0 0 10px var(--good);animation:pulse 1.4s infinite}
+.run-ledger{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:8.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted);white-space:nowrap;padding:3px 8px;border-radius:6px;margin-top:2px;
+  border:1px solid var(--line);background:rgba(255,255,255,.03)}
+.run-ledger .rk{color:var(--muted);opacity:.82;font-size:8px}
+.run-ledger b{color:var(--accent);font-weight:700;letter-spacing:0;text-transform:none;font-size:11px;font-variant-numeric:tabular-nums}
+.run-ledger b .ru{font-size:8px;color:var(--muted);margin-left:2px;letter-spacing:.05em}
+.run-ledger .rl-sep{width:1px;height:12px;background:var(--line-strong);opacity:.7;margin:0 1px}
 .engine-badge{font-family:var(--mono);font-size:9px;letter-spacing:1px;padding:3px 9px;border-radius:999px;white-space:nowrap;
   max-width:100%;overflow:hidden;text-overflow:ellipsis;
   color:var(--accent2);border:1px solid rgba(var(--accent2-rgb),.4);background:rgba(var(--accent2-rgb),.07);text-transform:uppercase}
@@ -256,6 +263,13 @@ body.theme-light .spec{background:rgba(255,255,255,.4)}
 .spec.live{border-color:rgba(var(--accent-rgb),.22)}
 .spec.live .v{color:var(--accent)}
 .model-card .stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.model-card .economy{grid-column:1/-1;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;margin-top:5px;padding-top:6px;
+  border-top:1px solid var(--line-strong);font-family:var(--mono);font-size:8px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.model-card .economy .ek{color:var(--faint);letter-spacing:.12em}
+.model-card .economy b{color:var(--accent2);font-size:11px;font-weight:700;letter-spacing:0;text-transform:none;font-variant-numeric:tabular-nums}
+.model-card .economy b.all{color:var(--text)}
+.model-card .economy .sub{color:var(--faint);font-size:7.5px;margin-left:auto;text-transform:none;letter-spacing:.04em}
+.model-card .economy .coal{color:var(--faint)}
 .model-card .stat .v{font-family:var(--mono);font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .model-card .stat .l{font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .model-card .spark{margin-top:8px;height:28px;display:block;width:100%}
@@ -822,9 +836,9 @@ body.fit #ev-feed{bottom:max(14px,env(safe-area-inset-bottom))}
   <div class="tm-list"></div>
 </div>
 
-<script src="/static/themes/runner.js?v=20261104j"></script>
+<script src="/static/themes/runner.js?v=20261104n"></script>
 <script>
-const ASSET_VER = '20261104j';
+const ASSET_VER = '20261104n';
 const $ = (id) => document.getElementById(id);
 const setHTML = (el, html) => {
   if (el.__nvtopHTML !== html){ el.innerHTML = html; el.__nvtopHTML = html; }
@@ -844,7 +858,8 @@ const fmt = (n, d=0) => {
 const fmtInt = (n) => fmt(n,0);
 const fmtCompact = (n) => {
   if (n == null || isNaN(n)) return '0';
-  if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1e9) return (n / 1e9).toFixed(n >= 1e10 ? 1 : 2).replace(/\.0+$/, '') + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e8 ? 1 : 2).replace(/\.0+$/, '') + 'M';
   if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
   return String(n);
 };
@@ -1604,6 +1619,7 @@ function modelCardTemplate(m){
       <div class="head-right">
         <div class="status"><span class="blip"></span><span data-role="state">${m.healthy?'live':'offline'}</span></div>
         <div class="engine-badge" data-role="engine" hidden></div>
+        <div class="run-ledger" data-role="ledger" hidden title="Cumulative work since this engine loaded its weights"><span class="rk">served</span><b data-role="lg-tok">—</b><span class="rl-sep"></span><span class="rk">up</span><b data-role="lg-up">—</b></div>
       </div>
     </div>
     <div class="blurb" data-role="blurb" hidden></div>
@@ -1620,6 +1636,12 @@ function modelCardTemplate(m){
       <div class="stat"><div class="v" data-role="run">0</div><div class="l">run</div></div>
       <div class="stat"><div class="v" data-role="wait">0</div><div class="l">queue</div></div>
       <div class="stat"><div class="v" data-role="kv">0%</div><div class="l">kv</div></div>
+      <div class="economy" data-role="economy" hidden>
+        <span class="ek">api equiv</span><b data-role="eco-load">—</b><span class="coal">this load</span>
+        <span class="rl-sep"></span>
+        <span class="ek">all-time</span><b class="all" data-role="eco-all">—</b><span class="coal">·</span><span class="coal" data-role="eco-vol">—</span>
+        <span class="sub" data-role="eco-sub"></span>
+      </div>
     </div>
     <canvas class="spark" data-role="spark"></canvas>
   </div>`;
@@ -1656,6 +1678,47 @@ function updateModelCard(card, m){
   const eng = Q('[data-role="engine"]');
   eng.hidden = !it.engine;
   if (it.engine) eng.textContent = it.engine + (it.engine_version ? ' ' + it.engine_version : '');
+  /* Run ledger: volume served since the weights were loaded + how long it has
+     been up. Counters come from the engine's own Prometheus totals, so they
+     reset exactly when the model reloads — no invented session arithmetic. */
+  const tokTotal = (m.prompt_tokens_total || 0) + (m.generation_tokens_total || 0);
+  const upS = it.uptime_s != null ? it.uptime_s : (m.loaded_uptime_s != null ? m.loaded_uptime_s : null);
+  /* Economics: what this load and the whole ledger would have cost at the
+     vendor's list price. Computed from the engine's own token counters — the
+     dashboard never guesses how a bill would be rounded. */
+  const eco = Q('[data-role="economy"]');
+  const api = (lastSnap && lastSnap.totals && lastSnap.totals.official_api) || null;
+  const at = (lastSnap && lastSnap.totals && lastSnap.totals.alltime) || null;
+  if (eco){
+    const pin = api ? Number(api.in_usd_mtok) || 0 : 0;
+    const pout = api ? Number(api.out_usd_mtok) || 0 : 0;
+    const money = (v) => v >= 1000 ? v.toLocaleString('en-US', {maximumFractionDigits: 0})
+                                   : v >= 10 ? v.toFixed(0) : v.toFixed(2);
+    const loadCost = ((m.prompt_tokens_total || 0) * pin + (m.generation_tokens_total || 0) * pout) / 1e6;
+    const allCost = at ? (at.in * pin + at.out * pout) / 1e6 : 0;
+    eco.hidden = !(api && m.healthy && tokTotal > 0);
+    if (!eco.hidden){
+      Q('[data-role="eco-load"]').textContent = '$' + money(loadCost);
+      Q('[data-role="eco-all"]').textContent = at ? '$' + money(allCost) : '—';
+      Q('[data-role="eco-vol"]').textContent = at ? `${fmtCompact(at.total)} tok` : '';
+      Q('[data-role="eco-sub"]').textContent = `peak list · $${pin.toFixed(2)} in / $${pout.toFixed(2)} out per Mtok`;
+      eco.title = `Reference: ${api.model} official list price, peak, cache-miss inputs`
+        + ` (off-peak $${api.offpeak_in_usd_mtok}/$${api.offpeak_out_usd_mtok}; ${api.source}, checked ${api.checked})\n`
+        + `this load: ${fmtCompact(tokTotal)} tok (${fmtCompact(m.prompt_tokens_total||0)} in / ${fmtCompact(m.generation_tokens_total||0)} out)\n`
+        + (at ? `all-time since ${at.since.slice(0,10)}: ${fmtCompact(at.total)} tok (${fmtCompact(at.in)} in / ${fmtCompact(at.out)} out)` : '');
+    }
+  }
+  const led = Q('[data-role="ledger"]');
+  if (led){
+    const showLed = !!m.healthy && (tokTotal > 0 || upS != null);
+    led.hidden = !showLed;
+    if (showLed){
+      Q('[data-role="lg-tok"]').innerHTML = tokTotal > 0 ? `${fmtCompact(tokTotal)}<span class="ru">tok</span>` : '—';
+      Q('[data-role="lg-up"]').textContent = upS != null ? fmtSecs(upS) : '—';
+      led.title = `Served ${tokTotal.toLocaleString('en-US')} tokens since load`
+        + (upS != null ? ` · up for ${fmtSecs(upS)}` : '');
+    }
+  }
   const blurb = Q('[data-role="blurb"]');
   blurb.hidden = !(it.blurb || it.summary);
   if (!blurb.hidden){
@@ -1700,9 +1763,6 @@ function updateModelCard(card, m){
   if (it.weights_gb) C(`${it.weights_gb >= 100 ? Math.round(it.weights_gb) : it.weights_gb} GB`, it.config_path ? 'source weights' : 'on disk');
   if (it.vram_mib) C(fmtBytesMib(it.vram_mib), `vram${it.tp ? ' · tp' + it.tp : ''}`, true);
   else if (it.tp) C(`TP${it.tp}`, 'parallelism');
-  if (it.uptime_s != null) C(fmtSecs(it.uptime_s), 'uptime', true);
-  const tok = (m.prompt_tokens_total || 0) + (m.generation_tokens_total || 0);
-  if (tok) C(fmtCompact(tok), 'tokens', true);
   const specs = Q('[data-role="specs"]');
   specs.hidden = !cells.length;
   setHTML(specs, cells.join(''));

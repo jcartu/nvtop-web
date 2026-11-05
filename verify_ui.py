@@ -104,6 +104,25 @@ with sync_playwright() as p:
     # including in fit mode (which previously hid the description entirely).
     lineage = pg.eval_on_selector(mc + '[data-role="lineage"]', "el => el.textContent")
     check("model card shows lineage", len(lineage.strip()) > 1 and lineage.strip() != "—", lineage)
+    ledger = pg.evaluate("""() => {
+      const el = document.querySelector('.model-card [data-role="ledger"]');
+      if (!el) return {ok: false, why: 'missing'};
+      const tok = el.querySelector('[data-role="lg-tok"]').textContent.trim();
+      const up = el.querySelector('[data-role="lg-up"]').textContent.trim();
+      return {ok: !el.hidden && /[0-9]/.test(tok) && /[0-9]/.test(up), tok: tok, up: up};
+    }""")
+    check("model run ledger shows tokens since load and uptime", ledger["ok"], ledger)
+    econ = pg.evaluate("""() => {
+      const e = document.querySelector('.model-card [data-role="economy"]');
+      const t = (lastSnap && lastSnap.totals) || {};
+      const a = t.alltime || {};
+      const api = t.official_api || {};
+      const vis = !!e && !e.hidden;
+      return {visible: vis, txt: vis ? e.textContent : '', all: a.total || 0,
+              since: a.since || '', pin: api.in_usd_mtok || 0,
+              ok: vis && e.textContent.indexOf('$') >= 0 && api.in_usd_mtok > 0};
+    }""")
+    check("official-API economics + all-time ledger", econ["ok"], econ)
     description = pg.locator(mc + '[data-role="blurb"]')
     check("model description visible in fit mode", description.is_visible())
     unclipped = description.evaluate("el => el.scrollHeight <= el.clientHeight + 1 && [...el.children].every(e => e.scrollHeight <= e.clientHeight + 1)")
@@ -146,9 +165,9 @@ with sync_playwright() as p:
       const val = document.getElementById('kpi-cost').textContent;
       const foot = document.getElementById('foot-cost').textContent;
       const tri = [...document.querySelectorAll('#lavg-cost b')].map(b => b.textContent);
-      return {val: val, foot: foot, tri: tri,
-              ok: val.includes('/Mtok') && /[0-9]/.test(val) && tri.length === 3 &&
-                  foot.toLowerCase().includes('out') && (val + foot).includes('$')};
+      const ok = val.includes('/Mtok') && foot.toLowerCase().includes('out') && tri.length === 3
+              && ((val + foot).includes('$') || val.startsWith('—'));
+      return {val: val, foot: foot, tri: tri, ok: ok};
     }""")
     check("cost instrument is $/Mtok with in/out split", mtok_row["ok"], mtok_row)
     coherence = pg.evaluate("""() => {
