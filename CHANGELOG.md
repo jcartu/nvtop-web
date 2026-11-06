@@ -27,6 +27,14 @@ All notable changes to nvtop-web.
   gains a 90% threshold guide and no longer degenerates into a truncated `CLUST…` label; a card
   container query stacks the header and drops tertiary peaks below 170px instead of colliding.
   Values stay token-driven, so all 17 palettes recolour automatically.
+- KPI strip: seven equal grid tracks replace intrinsic flex sizing, so tiles never breathe in and out
+  with value widths (previously the cost card grew a dozen pixels as digits changed). Cost treating now
+  speaks in roubles: **ELEC · MTOK** uses *realised* spend (accumulated ₽ ÷ accumulated tokens, per day/
+  month) rather than a power÷instantaneous-TPS ratio that advertised absurd prices at idle; the cloud
+  strip underneath shows the blended DS4.1F $/Mtok for our actual token mix plus the savings multiple.
+- Model economics became a real table: electricity ₽ and DS4.1F cloud $, this load vs all-time, with
+  FX and cost-basis in the tooltip. All-time tokens and measured kWh/peso accumulate together in the
+  served ledger, so the two sides share a clock.
 - 1/5/15 min load averages for total throughput, **input and output tok/s**, GPU utilisation and cluster power, computed
   server-side with uptime-style fixed-decay exponentials and seeded on first sample so a restarted
   service starts at truth instead of climbing from zero. Each headline KPI carries the triplet with

@@ -120,7 +120,7 @@ with sync_playwright() as p:
       const vis = !!e && !e.hidden;
       return {visible: vis, txt: vis ? e.textContent : '', all: a.total || 0,
               since: a.since || '', pin: api.in_usd_mtok || 0,
-              ok: vis && e.textContent.indexOf('$') >= 0 && api.in_usd_mtok > 0};
+              ok: vis && e.textContent.indexOf('$') >= 0 && e.textContent.indexOf('₽') >= 0 && api.in_usd_mtok > 0};
     }""")
     check("official-API economics + all-time ledger", econ["ok"], econ)
     description = pg.locator(mc + '[data-role="blurb"]')
@@ -156,6 +156,13 @@ with sync_playwright() as p:
     # 5e. headline instruments: load-average triplets + the cost bubble
     kpis = pg.eval_on_selector_all(".kpi", "els => els.length")
     check("seven headline KPI tiles", kpis == 7, kpis)
+    geo1 = pg.evaluate("""() => {
+      const rs = [...document.querySelectorAll('.kpi')].map(el => el.getBoundingClientRect());
+      const widths = rs.map(r => Math.round(r.width * 10) / 10);
+      const tops = new Set(rs.map(r => Math.round(r.top)));
+      return {widths: widths, spread: Math.max(...widths) - Math.min(...widths), rows: tops.size};
+    }""")
+    check("KPI tiles share one fixed width and one row", geo1["rows"] == 1 and geo1["spread"] <= 1, geo1)
     lavg_row = pg.evaluate("""() => {
       const lv = (lastSnap && lastSnap.totals && lastSnap.totals.lavg) || {};
       const chans = ['tps', 'output', 'input', 'util', 'power'];
@@ -168,11 +175,11 @@ with sync_playwright() as p:
       const val = document.getElementById('kpi-cost').textContent;
       const foot = document.getElementById('foot-cost').textContent;
       const tri = [...document.querySelectorAll('#lavg-cost b')].map(b => b.textContent);
-      const ok = val.includes('/Mtok') && foot.toLowerCase().includes('out') && tri.length === 3
-              && ((val + foot).includes('$') || val.startsWith('—'));
+      const ok = val.includes('/Mtok') && val.includes('₽') && foot.toLowerCase().includes('cloud')
+              && foot.includes('$') && tri.length === 3;
       return {val: val, foot: foot, tri: tri, ok: ok};
     }""")
-    check("cost instrument is $/Mtok with in/out split", mtok_row["ok"], mtok_row)
+    check("RUB electricity cost with USD cloud comparator", mtok_row["ok"], mtok_row)
     coherence = pg.evaluate("""() => {
       const t = lastSnap && lastSnap.totals; if (!t || !t.cost) return {ok: false, why: 'no cost block'};
       const c = t.cost, kwh = t.energy_today_kwh || 0;

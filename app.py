@@ -1705,6 +1705,7 @@ class State:
             "mem_pct_avg": deque(maxlen=HISTORY_POINTS),
             "power_total": deque(maxlen=HISTORY_POINTS),
         }
+        self.token_cost_hist: deque = deque(maxlen=920)  # (ts, day_cost_rub, tokens_today) at 1 Hz
         self.prev_counters: dict[str, dict[str, float]] = {}  # endpoint -> {prompt_total, gen_total, ts}
         self.subscribers: set[asyncio.Queue] = set()
         # Cache of the last LLM-endpoint scrape (refreshed on the slower
@@ -2186,6 +2187,8 @@ def _load_served_ledger() -> dict[str, Any]:
     _served_ledger.setdefault("in", 0)
     _served_ledger.setdefault("out", 0)
     _served_ledger.setdefault("endpoints", {})
+    _served_ledger.setdefault("energy_kwh", 0.0)
+    _served_ledger.setdefault("energy_rub", 0.0)
     _served_ledger.setdefault("saved", 0.0)
     return _served_ledger
 
@@ -2222,7 +2225,22 @@ def served_alltime() -> dict[str, Any]:
     led = _load_served_ledger()
     total = float(led.get("in") or 0.0) + float(led.get("out") or 0.0)
     return {"in": float(led.get("in") or 0.0), "out": float(led.get("out") or 0.0),
-            "total": total, "since": datetime.fromtimestamp(float(led.get("since") or time.time()), timezone.utc).isoformat()}
+            "total": total,
+            "energy_kwh": float(led.get("energy_kwh") or 0.0),
+            "energy_rub": float(led.get("energy_rub") or 0.0),
+            "since": datetime.fromtimestamp(float(led.get("since") or time.time()), timezone.utc).isoformat()}
+
+
+def account_ledger_energy(delta_kwh: float, cost_rub: float) -> None:
+    """Fold metered energy into the same all-time ledger as token volume.
+
+    Keeps the cloud-equivalent and electrical running totals on one clock so a
+    comparison is never apples-to-oranges by accident."""
+    if delta_kwh <= 0:
+        return
+    led = _load_served_ledger()
+    led["energy_kwh"] = float(led.get("energy_kwh") or 0.0) + float(delta_kwh)
+    led["energy_rub"] = float(led.get("energy_rub") or 0.0) + max(0.0, float(cost_rub))
 
 
 ENERGY_FILE = APP_ROOT / "energy_day.json"
@@ -2432,6 +2450,7 @@ def _account_energy(total_j: float, now: float) -> dict[str, float]:
     m_delta, _ = _advance_period(_energy_month, ENERGY_MONTH_FILE, month, total_j, now)
     tick_cost = _charge(m_delta, m_kwh_before)
     _energy_month["cost_rub"] = float(_energy_month.get("cost_rub") or 0.0) + tick_cost
+    account_ledger_energy(m_delta, tick_cost)
 
     _advance_period(_energy_day, ENERGY_FILE, day, total_j, now)
     _energy_day["cost_rub"] = float(_energy_day.get("cost_rub") or 0.0) + tick_cost
@@ -2456,6 +2475,48 @@ def _account_energy(total_j: float, now: float) -> dict[str, float]:
         "rate_rub": _rate_for(month_kwh),
         "seeded": _still_approximate(),
     }
+
+
+# ---------- Token volume per local day/month (for realised ₽/Mtok) ----------
+
+TOKENS_PERIOD_FILE = APP_ROOT / "tokens_period.json"
+_tokens_period: dict[str, Any] = {}
+
+
+def _account_token_periods(total_tokens: float, now: float) -> dict[str, float]:
+    """Consumption-tracked token volume for the current day and month.
+
+    Powers a *realised* electricity price in ₽ per million tokens instead of a
+    power÷instantaneous-rate estimate. Counters that step backwards (engine
+    reloads) re-base the same way the served ledger does."""
+    global _tokens_period
+    day = _stamp("%Y-%m-%d", now)
+    month = _stamp("%Y-%m", now)
+    if not _tokens_period:
+        try:
+            _tokens_period = json.loads(TOKENS_PERIOD_FILE.read_text())
+        except Exception:
+            _tokens_period = {}
+    seeded = float(served_alltime()["total"])
+    out = {}
+    for key, stamp, seed in (("day", day, seeded), ("month", month, seeded)):
+        st = _tokens_period.get(key) if isinstance(_tokens_period.get(key), dict) else None
+        if not st or st.get("stamp") != stamp:
+            st = {"stamp": stamp, "last": total_tokens, "acc": seed}
+            _tokens_period[key] = st
+        elif total_tokens < float(st.get("last") or 0.0) - 1:
+            st["acc"] = float(st.get("acc") or 0.0) + max(0.0, total_tokens)
+        else:
+            st["acc"] = float(st.get("acc") or 0.0) + max(0.0, total_tokens - float(st.get("last") or 0.0))
+        st["last"] = total_tokens
+        out[key] = float(st["acc"])
+    if now - float(_tokens_period.get("saved") or 0.0) > 60:
+        _tokens_period["saved"] = now
+        try:
+            TOKENS_PERIOD_FILE.write_text(json.dumps(_tokens_period))
+        except Exception:
+            pass
+    return {"today": out["day"], "month": out["month"]}
 
 
 # ---------- Load averages (uptime-style 1/5/15 min) ----------
@@ -2557,6 +2618,24 @@ def build_snapshot() -> dict[str, Any]:
         "day_kwh": 0.0, "day_cost_rub": 0.0, "month_kwh": 0.0, "month_cost_rub": 0.0, "rate_rub": _rate_for(0.0)}
     energy_today_j = energy["day_kwh"] * 3.6e6
     tokens_total = sum((m.get("prompt_tokens_total") or 0) + (m.get("generation_tokens_total") or 0) for m in models)
+    token_periods = _account_token_periods(tokens_total, now)
+    if record_history:
+        STATE.token_cost_hist.append((now, energy["day_cost_rub"], token_periods["today"]))
+    rate_tri = [None, None, None]
+    for wi, window in enumerate((60.0, 300.0, 900.0)):
+        hist = STATE.token_cost_hist
+        if len(hist) < 5:
+            continue
+        oldest = hist[0]
+        for point in hist:
+            if now - point[0] <= window:
+                oldest = point
+                break
+        span = now - oldest[0]
+        dc = energy["day_cost_rub"] - oldest[1]
+        dt = token_periods["today"] - oldest[2]
+        if span >= window * 0.55 and dt > 20000 and dc >= 0:
+            rate_tri[wi] = dc / (dt / 1e6)
     tok_per_kj = None
     if tot_energy_j > 0:
         _eff_window.append((now, tokens_total, tot_energy_j))
@@ -2630,6 +2709,11 @@ def build_snapshot() -> dict[str, Any]:
                 "rub_month_projected": _month_proj,
                 "kwh_today": energy["day_kwh"],
                 "kwh_month": energy["month_kwh"],
+                "tokens_today": token_periods["today"],
+                "tokens_month": token_periods["month"],
+                "rub_per_mtok_today": (energy["day_cost_rub"] / (token_periods["today"] / 1e6)) if token_periods["today"] > 50000 else None,
+                "rub_per_mtok_month": (energy["month_cost_rub"] / (token_periods["month"] / 1e6)) if token_periods["month"] > 500000 else None,
+                "rate_tri": rate_tri,
                 "rate_rub": energy["rate_rub"],
                 "approximate": energy.get("seeded", False),
                 "rates": TARIFF["rates_rub_kwh"],
@@ -2905,7 +2989,7 @@ async def auth_gate(request, call_next):
 # Version token for immutable static assets; bump when shipping UI changes.
 # HTML is always no-cache (ETag revalidation), so a bump here propagates on
 # the next page load through every layer (nginx, CDN, browser, direct :8801).
-ASSET_VERSION = "20261105a"
+ASSET_VERSION = "20261105e"
 
 
 @app.middleware("http")
