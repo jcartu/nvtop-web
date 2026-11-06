@@ -16,6 +16,12 @@ All notable changes to nvtop-web.
 - Duplicate raw uptime/token cells removed from the spec sheet; the ledger owns them.
 
 ### Load averages, energy cost, calmer instrumentation
+- Chart deck rebuilt for every theme: both cards share a two-tier instrument header — title, live
+  state token, sustained 15 min average, single primary figure — separated from the plot by a
+  capacity rail whose colour follows the state (nominal / pressured / saturated). The cluster card
+  gains a 90% threshold guide and no longer degenerates into a truncated `CLUST…` label; a card
+  container query stacks the header and drops tertiary peaks below 170px instead of colliding.
+  Values stay token-driven, so all 17 palettes recolour automatically.
 - 1/5/15 min load averages for total throughput, **input and output tok/s**, GPU utilisation and cluster power, computed
   server-side with uptime-style fixed-decay exponentials and seeded on first sample so a restarted
   service starts at truth instead of climbing from zero. Each headline KPI carries the triplet with

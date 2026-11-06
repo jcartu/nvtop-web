@@ -550,9 +550,33 @@ body[data-theme="jarvis"] .meter.crit .fill{filter:saturate(.88) brightness(.98)
 
 .global-charts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
 .chart-card{padding:10px 13px}
-.chart-card .h{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px}
-.chart-card .h .title{font-family:var(--font-head);font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.chart-card .h .now{font-family:var(--mono);font-size:14px;font-weight:700;min-width:70px;text-align:right;white-space:nowrap}
+.chart-card .h{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"id now";align-items:start;margin-bottom:2px;gap:10px}
+.chart-card .hid{grid-area:id;min-width:0}
+.chart-card .h .now{grid-area:now}
+.chart-card .h .title{font-family:var(--font-head);font-size:9.5px;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;font-weight:600;
+  display:flex;flex-wrap:nowrap;align-items:baseline;gap:6px;line-height:1.2;min-width:0;white-space:nowrap}
+.chart-card .h .title .soft{color:var(--text);opacity:.72;letter-spacing:.55px;font-weight:600;text-transform:inherit}
+.chart-card .h .now{font-family:var(--mono);font-size:14px;font-weight:700;min-width:0;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.chart-card .now.util{display:flex;align-items:baseline;gap:2px;line-height:1}
+.chart-card .now.util .n{font-size:24px;font-weight:800;letter-spacing:-.5px;color:var(--text)}
+.chart-card .now.util .unit{font-size:10px;color:var(--muted);font-weight:600;margin-left:1px}
+.chart-card .h-sub{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:3px;font-family:var(--mono);
+  font-size:8px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap}
+.chart-card .h-sub b{color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums}
+.chart-card .h-sub .st{color:var(--muted);font-weight:700;letter-spacing:.13em;padding:1px 5px;border:1px solid currentColor;border-radius:3px;opacity:.9;display:inline-flex;align-items:center;line-height:1.45}
+.chart-card .h-sub .st.on{color:var(--good)}
+.chart-card .h-sub .st.hot{color:var(--warn)}
+.chart-card .h-sub .st.max{color:var(--crit)}
+/* signal rail: the same physical read as the number, across every theme */
+.chart-card .rail{position:relative;height:3px;border-radius:2px;overflow:hidden;flex:none;margin:5px 0 5px;
+  background:color-mix(in srgb,var(--line) 65%,rgba(255,255,255,.06));box-shadow:inset 0 1px 1px rgba(0,0,0,.35)}
+.chart-card .rail i{display:block;height:100%;width:0;border-radius:2px;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 60%,var(--void)),var(--accent));
+  box-shadow:0 0 6px rgba(var(--accent-rgb),calc(.18*var(--glow)));
+  transition:width .55s cubic-bezier(.2,.8,.2,1),background .4s}
+.chart-card .rail i.on{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 55%,var(--void)),var(--accent) 70%,color-mix(in srgb,var(--accent) 55%,var(--text)))}
+.chart-card .rail i.hot{background:linear-gradient(90deg,color-mix(in srgb,var(--warn) 55%,var(--void)),var(--warn));box-shadow:0 0 6px rgba(var(--warn-rgb),calc(.2*var(--glow)))}
+.chart-card .rail i.max{background:linear-gradient(90deg,color-mix(in srgb,var(--crit) 55%,var(--void)),var(--crit));box-shadow:0 0 7px rgba(var(--crit-rgb),calc(.22*var(--glow)))}
 .chart-card canvas{display:block;width:100%;height:84px}
 /* ── hero: total throughput ── */
 .chart-card.hero{overflow:hidden;--f:0}
@@ -568,7 +592,7 @@ body[data-theme="jarvis"] .meter.crit .fill{filter:saturate(.88) brightness(.98)
 .hero-sub b{color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums}
 .hero-sub span:nth-child(3) b{color:var(--accent2)}
 .hero-sub span:nth-child(4) b{color:var(--text)}
-#tps-fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;mix-blend-mode:screen}
+#tps-fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;mix-blend-mode:screen;opacity:.78}
 body.theme-light #tps-fx{mix-blend-mode:multiply;opacity:.5}
 .chart-card.hero::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
   box-shadow:inset 0 0 calc(var(--f)*60px) rgba(var(--accent-rgb),calc(var(--f)*.18*var(--glow)));transition:box-shadow .6s}
@@ -580,6 +604,17 @@ footer b{color:var(--muted);font-weight:500}
 .live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 10px var(--good);animation:pulse 1.2s infinite;margin-right:6px;vertical-align:middle}
 
 /* ── responsive: foldables / phones / portrait monitors ── */
+.chart-card{container:chartcard / inline-size}
+@container chartcard (max-width:170px){
+  .chart-card .h{grid-template-columns:minmax(0,1fr);grid-template-areas:"now" "id";gap:2px}
+  .chart-card .h .now{justify-self:start;text-align:left}
+  .chart-card .now.util .n{font-size:25px}
+  .chart-card .h .title{font-size:8px;letter-spacing:.9px;white-space:normal;line-height:1.25}
+  .chart-card .hero-sub{font-size:8px;margin-top:1px}
+  .chart-card .h-sub{gap:6px;margin-top:1px}
+  .chart-card .h-sub .hn{display:none}
+}
+@container chartcard (max-width:210px){ .chart-card .h-sub .hn,.chart-card .hero-sub .hn{display:none} }
 @media(max-width:1470px){
   header.top{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand btns" "kpis kpis";row-gap:8px}
   .kpis{justify-content:space-between}
@@ -610,6 +645,8 @@ footer b{color:var(--muted);font-weight:500}
   .global-charts{gap:8px}
   .chart-card canvas{height:60px}
   .chart-card .h .now{font-size:12px;min-width:0}
+  .chart-card .now.util .n{font-size:19px}
+  .chart-card .h .title{flex-wrap:wrap;white-space:normal}
   .models-grid,.gpu-grid{gap:10px}
   .model-card .stats{gap:4px}
   .model-card .stat .v{font-size:12.5px}
@@ -807,14 +844,22 @@ body.fit #ev-feed{bottom:max(14px,env(safe-area-inset-bottom))}
     <div class="global-charts">
       <div class="panel chart-card hero" id="tps-hero">
         <div class="h">
-          <div><div class="title">Total tok/s</div><div class="hero-sub" id="tps-sub"><span>↑<b>0</b></span><span>↓<b>0</b></span><span>pk <b>0</b></span><span>rec <b>0</b></span></div></div>
+          <div class="hid"><div class="title">Total <span class="soft">throughput</span></div><div class="hero-sub" id="tps-sub"><span>↑<b>0</b></span><span>↓<b>0</b></span><span>pk <b>0</b></span><span>rec <b>0</b></span></div></div>
           <div class="now" id="ch-tps-now">0<span class="unit">tok/s</span></div>
         </div>
+        <div class="rail" aria-hidden="true"><i id="tps-rail"></i></div>
         <canvas id="ch-tps"></canvas>
         <canvas id="tps-fx" aria-hidden="true"></canvas>
       </div>
-      <div class="panel chart-card">
-        <div class="h"><div class="title">Cluster util</div><div class="now" id="ch-util-now">0%</div></div>
+      <div class="panel chart-card util-card">
+        <div class="h">
+          <div class="hid">
+            <div class="title">Cluster <span class="soft">util</span></div>
+            <div class="h-sub"><span class="st" id="cu-state">—</span><span id="cu-avg15">15m —</span><span class="hn" id="cu-pk">pk —</span></div>
+          </div>
+          <div class="now util" id="ch-util-now"><span class="n">0</span><span class="unit">%</span></div>
+        </div>
+        <div class="rail" aria-hidden="true"><i id="cu-rail"></i></div>
         <canvas id="ch-util"></canvas>
       </div>
     </div>
@@ -836,9 +881,9 @@ body.fit #ev-feed{bottom:max(14px,env(safe-area-inset-bottom))}
   <div class="tm-list"></div>
 </div>
 
-<script src="/static/themes/runner.js?v=20261104n"></script>
+<script src="/static/themes/runner.js?v=20261104v"></script>
 <script>
-const ASSET_VER = '20261104n';
+const ASSET_VER = '20261104v';
 const $ = (id) => document.getElementById(id);
 const setHTML = (el, html) => {
   if (el.__nvtopHTML !== html){ el.innerHTML = html; el.__nvtopHTML = html; }
@@ -1215,6 +1260,10 @@ function drawLine(canvas, data, color, fillColor, opts={}){
   const ys = (v) => h - pad - (h - pad*2) * ((v - min)/(max - min));
   ctx.strokeStyle = UI.light ? 'rgba(0,0,0,.06)' : 'rgba(255,255,255,.05)'; ctx.lineWidth=1;
   for (let i=1;i<4;i++){ const y = h*i/4; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  if (opts.guide != null && opts.guide > min && opts.guide < max){
+    ctx.save(); ctx.setLineDash([3,4]); ctx.strokeStyle = UI.light ? 'rgba(0,0,0,.18)' : 'rgba(255,255,255,.16)';
+    const gy = ys(opts.guide); ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(w,gy); ctx.stroke(); ctx.restore();
+  }
   if (fillColor){
     ctx.beginPath();
     ctx.moveTo(xs(0), h);
@@ -2159,7 +2208,7 @@ function renderHeader(snap){
 
 /* ════════ HERO: total throughput — tweened odometer, load glow, token stream ════════ */
 const Hero = (() => {
-  const card = $('tps-hero'), now = $('ch-tps-now'), sub = $('tps-sub'), fx = $('tps-fx');
+  const card = $('tps-hero'), now = $('ch-tps-now'), sub = $('tps-sub'), fx = $('tps-fx'), rail = $('tps-rail');
   let target = 0, shown = 0, peak = 0, record = 0, outT = 0, inT = 0, lastText = '', raf = 0, lastT = performance.now();
   try { record = parseFloat(localStorage.getItem('nvtop-tps-record')) || 0; } catch(e){}
   const parts = [];           // token particles: {x,y,vx,vy,life,len}
@@ -2186,6 +2235,7 @@ const Hero = (() => {
     const f = peak > 1 ? Math.min(1, shown / peak) : 0;
     const fs = f.toFixed(3);
     if (card.style.getPropertyValue('--f') !== fs){ card.style.setProperty('--f', fs); const k1 = document.querySelector('.kpi.c-accent'); if (k1) k1.style.setProperty('--f', fs); }
+    if (rail){ const wpx = (f*100).toFixed(1) + '%'; if (rail.style.width !== wpx) rail.style.width = wpx; }
     /* token stream */
     const dpr = window.devicePixelRatio || 1, w = fx.clientWidth, h = fx.clientHeight;
     if (w && h){
@@ -2230,8 +2280,23 @@ function renderGlobalCharts(snap){
   drawLine($('ch-tps'), tps, UI.accent, hexA(UI.accent,.30), {zeroBase:true, hero:true, peak: Hero.peak()});
 
   const util = snap.totals.history.gpu_util_avg || [];
-  drawLine($('ch-util'), util, UI.info, hexA(UI.info,.22), {min:0,max:100});
-  $('ch-util-now').textContent = `${snap.totals.gpu_util_avg.toFixed(0)}%`;
+  drawLine($('ch-util'), util, UI.info, hexA(UI.info,.22), {min:0,max:100,guide:90});
+  const u = Math.max(0, Math.min(100, snap.totals.gpu_util_avg || 0));
+  const uEl = $('ch-util-now');
+  setHTML(uEl, `<span class="n">${u.toFixed(0)}</span><span class="unit">%</span>`);
+  const rail = $('cu-rail');
+  if (rail){ rail.style.width = u.toFixed(1) + '%'; rail.className = u >= 95 ? 'max' : u >= 80 ? 'hot' : u >= 25 ? 'on' : ''; }
+  const st = $('cu-state');
+  if (st){
+    const [label, cls] = u >= 97 ? ['SATURATED', 'max'] : u >= 85 ? ['PRESSURED', 'hot']
+      : u >= 40 ? ['WORKING', 'on'] : u > 2 ? ['LIGHT', ''] : ['IDLE', ''];
+    if (st.textContent !== label) st.textContent = label;
+    const cn = 'st ' + cls; if (st.className !== cn) st.className = cn;
+  }
+  const lv = (snap.totals.lavg || {}).util;
+  const a15 = $('cu-avg15'), pk = $('cu-pk');
+  if (a15) setHTML(a15, `15m <b>${lv ? Math.round(lv[2]) + '%' : '—'}</b>`);
+  if (pk) setHTML(pk, `pk <b>${util.length ? Math.max(...util).toFixed(0) + '%' : '—'}</b>`);
 }
 
 /* ════════ EVENT ENGINE — every telemetry signal → visible ticker entry + wallpaper pulse ════════ */

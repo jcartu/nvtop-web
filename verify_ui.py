@@ -180,6 +180,17 @@ with sync_playwright() as p:
     }""")
     check("energy cost coherent with metered kWh", coherence["ok"], coherence.get("why"))
 
+    cluster = pg.evaluate("""() => {
+      const n = document.getElementById('ch-util-now');
+      const st = document.getElementById('cu-state');
+      const rail = document.getElementById('cu-rail');
+      const u = n ? (parseFloat(n.textContent) || 0) : 0;
+      const rw = rail ? (parseFloat(rail.style.width) || 0) : 0;
+      return {num: n ? n.textContent.trim() : '', state: st ? st.textContent.trim() : '', util: u, rail: rw,
+              ok: !!n && /[0-9]/.test((n.textContent || '')) && !!st && !!st.textContent.trim() && (u === 0 || rw > 0)};
+    }""")
+    check("cluster utilisation instrument renders percentage, state and rail", cluster["ok"], cluster)
+
     # 5f. cold-start theme restore: every theme reloads into itself, not the default
     names = pg.evaluate("() => Object.fromEntries(Object.entries(window.NVTHEMES||{}).map(([k,v]) => [k, v.name]))")
     for t in THEMES:
