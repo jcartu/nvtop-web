@@ -16,6 +16,11 @@ All notable changes to nvtop-web.
 - Duplicate raw uptime/token cells removed from the spec sheet; the ledger owns them.
 
 ### Load averages, energy cost, calmer instrumentation
+- Hero throughput figure now scales from the card's own width (`8.4cqw`) instead of viewport height,
+  ending the 40 px overlap on narrow decks; units ride the numeral baseline, the decoration glow is
+  halved, and both charts reserve 14% headroom plus a 16 px axis gutter so peaks no longer kiss the
+  header rail. Added real time-axis context (`◂120s / now`) and made the narrow-card grammar
+  identical across both instruments instead of only the cluster one.
 - Chart deck rebuilt for every theme: both cards share a two-tier instrument header — title, live
   state token, sustained 15 min average, single primary figure — separated from the plot by a
   capacity rail whose colour follows the state (nominal / pressured / saturated). The cluster card

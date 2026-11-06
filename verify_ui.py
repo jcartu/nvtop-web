@@ -157,8 +157,11 @@ with sync_playwright() as p:
     kpis = pg.eval_on_selector_all(".kpi", "els => els.length")
     check("seven headline KPI tiles", kpis == 7, kpis)
     lavg_row = pg.evaluate("""() => {
-      const tris = [...document.querySelectorAll('.lavg')].map(el => [...el.querySelectorAll('b')].map(b => b.textContent.trim()));
-      return {count: tris.length, ok: tris.length === 6 && tris.every(t => t.length === 3 && t.every(v => v && v !== '—'))};
+      const lv = (lastSnap && lastSnap.totals && lastSnap.totals.lavg) || {};
+      const chans = ['tps', 'output', 'input', 'util', 'power'];
+      const okChan = chans.every(k => Array.isArray(lv[k]) && lv[k].length === 3 && lv[k].every(v => Number.isFinite(v)));
+      const rails = document.querySelectorAll('.lavg').length;
+      return {count: rails, ok: rails === 6 && okChan, lavg: lv};
     }""")
     check("1/5/15 min averages on total/out/in/util/power/cost", lavg_row["count"] == 6 and lavg_row["ok"], lavg_row)
     mtok_row = pg.evaluate("""() => {

@@ -560,7 +560,7 @@ body[data-theme="jarvis"] .meter.crit .fill{filter:saturate(.88) brightness(.98)
 .chart-card .now.util{display:flex;align-items:baseline;gap:2px;line-height:1}
 .chart-card .now.util .n{font-size:24px;font-weight:800;letter-spacing:-.5px;color:var(--text)}
 .chart-card .now.util .unit{font-size:10px;color:var(--muted);font-weight:600;margin-left:1px}
-.chart-card .h-sub{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:3px;font-family:var(--mono);
+.chart-card .h-sub{display:flex;flex-wrap:wrap;align-items:center;line-height:1.45;gap:9px;margin-top:3px;font-family:var(--mono);
   font-size:8px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap}
 .chart-card .h-sub b{color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums}
 .chart-card .h-sub .st{color:var(--muted);font-weight:700;letter-spacing:.13em;padding:1px 5px;border:1px solid currentColor;border-radius:3px;opacity:.9;display:inline-flex;align-items:center;line-height:1.45}
@@ -578,21 +578,23 @@ body[data-theme="jarvis"] .meter.crit .fill{filter:saturate(.88) brightness(.98)
 .chart-card .rail i.hot{background:linear-gradient(90deg,color-mix(in srgb,var(--warn) 55%,var(--void)),var(--warn));box-shadow:0 0 6px rgba(var(--warn-rgb),calc(.2*var(--glow)))}
 .chart-card .rail i.max{background:linear-gradient(90deg,color-mix(in srgb,var(--crit) 55%,var(--void)),var(--crit));box-shadow:0 0 7px rgba(var(--crit-rgb),calc(.22*var(--glow)))}
 .chart-card canvas{display:block;width:100%;height:84px}
+.axis-note{position:absolute;left:12px;right:12px;bottom:5px;display:flex;justify-content:space-between;pointer-events:none;
+  font-family:var(--mono);font-size:7.5px;letter-spacing:.11em;text-transform:uppercase;color:color-mix(in srgb,var(--muted) 55%,var(--text));opacity:.95;text-shadow:0 0 6px var(--void)}
 /* ── hero: total throughput ── */
 .chart-card.hero{overflow:hidden;--f:0}
 .chart-card.hero .h{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;margin-bottom:2px;gap:10px}
 .chart-card.hero .h>div:first-child{min-width:0}
-.chart-card.hero .now{font-family:var(--mono);font-size:clamp(22px,3.3vh,40px);flex:none;white-space:nowrap;font-weight:800;letter-spacing:-1px;line-height:1;
+.chart-card.hero .now{font-family:var(--mono);font-size:clamp(19px,8.4cqw,36px);flex:none;white-space:nowrap;font-weight:800;letter-spacing:-.6px;line-height:1.05;
   color:color-mix(in srgb,var(--text) calc(100% - var(--f)*45%),#fff);min-width:0;text-align:right;font-variant-numeric:tabular-nums;
-  text-shadow:0 0 calc(6px + var(--f)*30px) rgba(var(--accent-rgb),calc((.25 + var(--f)*.75)*var(--glow))),0 0 4px rgba(var(--accent-rgb),calc(var(--f)*.9*var(--glow)));
+  text-shadow:0 0 calc(3px + var(--f)*12px) rgba(var(--accent-rgb),calc((.2 + var(--f)*.55)*var(--glow)));
   transition:color .6s}
-.chart-card.hero .now .unit{font-size:.36em;color:var(--muted);margin-left:.3em;font-weight:600;letter-spacing:0;vertical-align:baseline}
+.chart-card.hero .now .unit{font-size:.40em;color:var(--muted);margin-left:.30em;font-weight:600;letter-spacing:.01em;vertical-align:baseline;line-height:1}
 .hero-sub{display:flex;gap:8px;flex-wrap:nowrap;overflow:hidden;white-space:nowrap;font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--faint);margin-top:4px;
   mask-image:linear-gradient(90deg,#000 calc(100% - 16px),transparent);-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 16px),transparent)}
 .hero-sub b{color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums}
 .hero-sub span:nth-child(3) b{color:var(--accent2)}
 .hero-sub span:nth-child(4) b{color:var(--text)}
-#tps-fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;mix-blend-mode:screen;opacity:.78}
+#tps-fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;mix-blend-mode:screen;opacity:.55}
 body.theme-light #tps-fx{mix-blend-mode:multiply;opacity:.5}
 .chart-card.hero::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
   box-shadow:inset 0 0 calc(var(--f)*60px) rgba(var(--accent-rgb),calc(var(--f)*.18*var(--glow)));transition:box-shadow .6s}
@@ -605,6 +607,10 @@ footer b{color:var(--muted);font-weight:500}
 
 /* ── responsive: foldables / phones / portrait monitors ── */
 .chart-card{container:chartcard / inline-size}
+@container chartcard (max-width:260px){
+  .chart-card.hero .h{grid-template-columns:minmax(0,1fr);grid-template-areas:"now" "id";row-gap:3px}
+  .chart-card.hero .now{justify-self:start;text-align:left;font-size:clamp(21px,10cqw,30px)}
+}
 @container chartcard (max-width:170px){
   .chart-card .h{grid-template-columns:minmax(0,1fr);grid-template-areas:"now" "id";gap:2px}
   .chart-card .h .now{justify-self:start;text-align:left}
@@ -614,6 +620,7 @@ footer b{color:var(--muted);font-weight:500}
   .chart-card .h-sub{gap:6px;margin-top:1px}
   .chart-card .h-sub .hn{display:none}
 }
+@container chartcard (max-width:300px){ .chart-card.hero .hero-sub .ho{display:none} }
 @container chartcard (max-width:210px){ .chart-card .h-sub .hn,.chart-card .hero-sub .hn{display:none} }
 @media(max-width:1470px){
   header.top{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand btns" "kpis kpis";row-gap:8px}
@@ -847,9 +854,10 @@ body.fit #ev-feed{bottom:max(14px,env(safe-area-inset-bottom))}
           <div class="hid"><div class="title">Total <span class="soft">throughput</span></div><div class="hero-sub" id="tps-sub"><span>↑<b>0</b></span><span>↓<b>0</b></span><span>pk <b>0</b></span><span>rec <b>0</b></span></div></div>
           <div class="now" id="ch-tps-now">0<span class="unit">tok/s</span></div>
         </div>
-        <div class="rail" aria-hidden="true"><i id="tps-rail"></i></div>
+        <div class="rail" aria-hidden="true" title="Live throughput as a share of the session peak"><i id="tps-rail"></i></div>
         <canvas id="ch-tps"></canvas>
         <canvas id="tps-fx" aria-hidden="true"></canvas>
+        <div class="axis-note" aria-hidden="true"><span>◂ 120s</span><span>now</span></div>
       </div>
       <div class="panel chart-card util-card">
         <div class="h">
@@ -859,8 +867,9 @@ body.fit #ev-feed{bottom:max(14px,env(safe-area-inset-bottom))}
           </div>
           <div class="now util" id="ch-util-now"><span class="n">0</span><span class="unit">%</span></div>
         </div>
-        <div class="rail" aria-hidden="true"><i id="cu-rail"></i></div>
+        <div class="rail" aria-hidden="true" title="Cluster GPU utilisation against the 100% ceiling"><i id="cu-rail"></i></div>
         <canvas id="ch-util"></canvas>
+        <div class="axis-note" aria-hidden="true"><span>◂ 120s</span><span>now</span></div>
       </div>
     </div>
 
@@ -881,9 +890,9 @@ body.fit #ev-feed{bottom:max(14px,env(safe-area-inset-bottom))}
   <div class="tm-list"></div>
 </div>
 
-<script src="/static/themes/runner.js?v=20261104v"></script>
+<script src="/static/themes/runner.js?v=20261105a"></script>
 <script>
-const ASSET_VER = '20261104v';
+const ASSET_VER = '20261105a';
 const $ = (id) => document.getElementById(id);
 const setHTML = (el, html) => {
   if (el.__nvtopHTML !== html){ el.innerHTML = html; el.__nvtopHTML = html; }
@@ -1255,9 +1264,12 @@ function drawLine(canvas, data, color, fillColor, opts={}){
   let max = opts.max ?? Math.max(...data);
   if (max - min < 1e-6){ max = min + 1; }
   if (opts.zeroBase) min = 0;
-  const pad = 4;
-  const xs = (i) => pad + (w - pad*2) * (i/(data.length-1));
-  const ys = (v) => h - pad - (h - pad*2) * ((v - min)/(max - min));
+  if (opts.headroom){ max += (max - min) * 0.14; }
+  const padX = 8;
+  const padT = opts.hero ? 12 : 10;
+  const padB = opts.axes ? 16 : 10;
+  const xs = (i) => padX + (w - padX*2) * (i/(data.length-1));
+  const ys = (v) => h - padB - (h - padT - padB) * ((v - min)/(max - min));
   ctx.strokeStyle = UI.light ? 'rgba(0,0,0,.06)' : 'rgba(255,255,255,.05)'; ctx.lineWidth=1;
   for (let i=1;i<4;i++){ const y = h*i/4; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
   if (opts.guide != null && opts.guide > min && opts.guide < max){
@@ -1271,18 +1283,19 @@ function drawLine(canvas, data, color, fillColor, opts={}){
     ctx.lineTo(xs(data.length-1), h); ctx.closePath();
     const g = ctx.createLinearGradient(0,0,0,h);
     g.addColorStop(0, fillColor);
+    g.addColorStop(0.72, hexA(color, opts.hero ? 0.07 : 0.04));
     g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g; ctx.fill();
   }
   if (opts.peak != null && opts.peak > 0){
     const py = ys(opts.peak);
-    if (py > 2 && py < h - 2){
+    if (py > 3 && py < h - 3){
       ctx.save(); ctx.setLineDash([3,4]); ctx.strokeStyle = hexA(UI.accent2, .55); ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(pad, py); ctx.lineTo(w - pad, py); ctx.stroke(); ctx.restore();
+      ctx.beginPath(); ctx.moveTo(padX, py); ctx.lineTo(w - padX, py); ctx.stroke(); ctx.restore();
     }
   }
-  ctx.strokeStyle = color; ctx.lineWidth = opts.hero ? 2.4 : 1.8; ctx.lineJoin='round'; ctx.lineCap='round';
-  ctx.shadowColor = color; ctx.shadowBlur = UI.light ? 0 : (opts.hero ? 16 : 8);
+  ctx.strokeStyle = color; ctx.lineWidth = opts.hero ? 2.0 : 1.6; ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.shadowColor = color; ctx.shadowBlur = UI.light ? 0 : (opts.hero ? 9 : 6);
   ctx.beginPath();
   for (let i=0;i<data.length;i++){
     const x = xs(i), y = ys(data[i]);
@@ -2277,10 +2290,10 @@ const Hero = (() => {
 function renderGlobalCharts(snap){
   const tps = snap.totals.history.total_tps || [];
   Hero.set(snap.totals);
-  drawLine($('ch-tps'), tps, UI.accent, hexA(UI.accent,.30), {zeroBase:true, hero:true, peak: Hero.peak()});
+  drawLine($('ch-tps'), tps, UI.accent, hexA(UI.accent,.34), {zeroBase:true, hero:true, peak: Hero.peak(), headroom:true, axes:true});
 
   const util = snap.totals.history.gpu_util_avg || [];
-  drawLine($('ch-util'), util, UI.info, hexA(UI.info,.22), {min:0,max:100,guide:90});
+  drawLine($('ch-util'), util, UI.info, hexA(UI.info,.22), {min:0,max:100,guide:90,headroom:true,axes:true});
   const u = Math.max(0, Math.min(100, snap.totals.gpu_util_avg || 0));
   const uEl = $('ch-util-now');
   setHTML(uEl, `<span class="n">${u.toFixed(0)}</span><span class="unit">%</span>`);
